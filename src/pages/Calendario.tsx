@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Plus, CircleDot, Share2, Download } from "lucide-react";
 import { format, parseISO, startOfWeek, addDays, isSameDay, isValid } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useAppContext } from "@/contexts/AppContext";
@@ -118,6 +118,99 @@ export default function Calendario() {
     setCurrentDate(normalizeDate(newDate));
   };
 
+  const goToToday = () => {
+    setCurrentDate(normalizeDate(new Date()));
+  };
+
+  const handleGoogleCalendarIntegration = () => {
+    if (eventosProcessados.length === 0) {
+      alert("Nenhum evento para adicionar ao Google Calendar");
+      return;
+    }
+
+    const firstEvent = eventosProcessados[0];
+
+    const title = encodeURIComponent(firstEvent.titulo ?? "Evento");
+    
+    // Constrói descrição com todas informações
+    const descriptionParts = [
+      `Cliente: ${firstEvent.clienteNome ?? "N/A"}`,
+      `Tipo: ${firstEvent.tipo ?? "N/A"}`,
+      `Hora: ${firstEvent.horaInicio ?? "--:--"}`,
+      firstEvent.aniversarianteNome ? `Aniversariante: ${firstEvent.aniversarianteNome}${firstEvent.idade ? ` (${firstEvent.idade} anos)` : ""}` : null,
+      firstEvent.decoracao ? `Decoração: ${firstEvent.decoracao}` : null,
+      firstEvent.quantidadeConvidados ? `Quantidade de Convidados: ${firstEvent.quantidadeConvidados}` : null,
+      firstEvent.observacoes ? `Observações: ${firstEvent.observacoes}` : null,
+    ].filter(Boolean);
+    
+    const description = encodeURIComponent(descriptionParts.join("\n"));
+    
+    const startDate = format(firstEvent.dataDate, "yyyyMMdd");
+    const [hours, minutes] = (firstEvent.horaInicio ?? "00:00").split(":");
+    const startTime = `${hours}${minutes}00`;
+    const endTime = `${String(Number(hours) + 1).padStart(2, "0")}${minutes}00`;
+
+    const googleCalendarUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${description}&dates=${startDate}T${startTime}Z/${startDate}T${endTime}Z`;
+    window.open(googleCalendarUrl, "_blank");
+  };
+
+  const handleExportCalendar = () => {
+    if (eventosProcessados.length === 0) {
+      alert("Nenhum evento para exportar");
+      return;
+    }
+
+    // Constrói arquivo ICS
+    let icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Meu Salao//Calendar//PT
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Meu Salao - Eventos
+X-WR-TIMEZONE:America/Sao_Paulo
+BEGIN:VTIMEZONE
+TZID:America/Sao_Paulo
+BEGIN:STANDARD
+DTSTART:20230101T000000
+TZOFFSETFROM:-0300
+TZOFFSETTO:-0300
+TZNAME:BRST
+END:STANDARD
+END:VTIMEZONE
+`;
+
+    eventosProcessados.forEach((ev) => {
+      const startDate = format(ev.dataDate, "yyyyMMdd");
+      const [hours, minutes] = (ev.horaInicio ?? "00:00").split(":");
+      const startDateTime = `${startDate}T${hours}${minutes}00`;
+      const endDateTime = `${startDate}T${String(Number(hours) + 1).padStart(2, "0")}${minutes}00`;
+      const uid = `${ev.id}@meusalao.local`;
+      const title = (ev.titulo ?? "Evento").replace(/"/g, '\\"');
+      const description = `Cliente: ${ev.clienteNome ?? "N/A"} | Tipo: ${ev.tipo ?? "N/A"}`.replace(/"/g, '\\"');
+
+      icsContent += `BEGIN:VEVENT
+UID:${uid}
+DTSTART:${startDateTime}
+DTEND:${endDateTime}
+SUMMARY:${title}
+DESCRIPTION:${description}
+STATUS:${ev.status === "confirmado" ? "CONFIRMED" : "TENTATIVE"}
+END:VEVENT
+`;
+    });
+
+    icsContent += `END:VCALENDAR`;
+
+    // Cria blob e faz download
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = `calendario_meusalao_${format(new Date(), "ddMMyyyy")}.ics`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const getTipoColor = (tipo?: string) => {
     switch (tipo) {
       case "festa":
@@ -209,6 +302,31 @@ export default function Calendario() {
                     onClick={() => navigateWeek("next")}
                   >
                     <ChevronRight size={16} />
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white ml-2"
+                    onClick={goToToday}
+                  >
+                    Hoje
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50 ml-2"
+                    onClick={handleGoogleCalendarIntegration}
+                    title="Integrar com Google Calendar"
+                  >
+                    <Share2 size={16} />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-300 text-blue-700 hover:bg-blue-50 ml-2"
+                    onClick={handleExportCalendar}
+                    title="Exportar calendário como ICS"
+                  >
+                    <Download size={16} />
                   </Button>
                 </div>
               </div>
