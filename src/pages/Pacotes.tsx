@@ -354,7 +354,7 @@ export default function Pacotes() {
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-foreground">Propostas, Adicionais e Equipes</h1>
         <p className="text-muted-foreground mt-2">
-          Gerencie todos os componentes para seus eventos
+          Gerencie todos os componentes para seus Eventos
         </p>
       </div>
 
@@ -504,7 +504,7 @@ export default function Pacotes() {
                 <Gift size={20} />
                 {editingAdicionalId ? "Editar Adicional" : "Cadastrar Novo Adicional"}
               </CardTitle>
-              <p className="text-xs text-blue-600 mt-1">Adicione serviços extras aos seus eventos</p>
+              <p className="text-xs text-blue-600 mt-1">Adicione Eventos extras aos seus Eventos</p>
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSubmitAdicional} className="space-y-4">
@@ -603,7 +603,7 @@ export default function Pacotes() {
                 <Package size={20} />
                 {editingPacoteId ? "Editar Proposta" : "Cadastrar Nova Proposta"}
               </CardTitle>
-              <p className="text-xs text-blue-800 mt-1">Configure o pacote base para seus eventos</p>
+              <p className="text-xs text-blue-800 mt-1">Configure o pacote base para seus Eventos</p>
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSubmitPacote} className="space-y-4">

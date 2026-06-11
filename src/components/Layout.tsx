@@ -33,7 +33,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <div className="px-6 py-5 border-b border-blue-500 flex items-center gap-3">
           {/* coloque sua logo aqui se tiver */}
           <div className="flex flex-col">
-            <span className="text-lg font-semibold tracking-tight">Meu Salão</span>
+            <span className="text-lg font-semibold tracking-tight">Gestão Piscinas</span>
             <span className="text-xs text-blue-200">Painel de gestão</span>
           </div>
         </div>
@@ -70,7 +70,7 @@ export const Layout = ({ children }: LayoutProps) => {
           </NavLink>
 
           <NavLink
-            to="/eventos"
+            to="/Eventos"
             className={({ isActive }) =>
               `flex items-center gap-2 rounded-md px-3 py-2 transition ${
                 isActive
@@ -83,7 +83,7 @@ export const Layout = ({ children }: LayoutProps) => {
             <span>Eventos</span>
           </NavLink>
 
-          <NavLink
+          {/* <NavLink
             to="/propostas"
             className={({ isActive }) =>
               `flex items-center gap-2 rounded-md px-3 py-2 transition ${
@@ -95,7 +95,7 @@ export const Layout = ({ children }: LayoutProps) => {
           >
             <Package size={16} />
             <span>Propostas</span>
-          </NavLink>
+          </NavLink> */}
 
           <NavLink
             to="/clientes"
@@ -128,7 +128,7 @@ export const Layout = ({ children }: LayoutProps) => {
 
         {/* rodapé: Conta / Ajuda / Sair */}
         <div className="border-t border-blue-600 px-3 py-3 text-sm space-y-1">
-          <NavLink
+          {/* <NavLink
             to="/ajuda"
             className={({ isActive }) =>
               `flex items-center gap-2 rounded-md px-3 py-2 transition ${
@@ -140,7 +140,7 @@ export const Layout = ({ children }: LayoutProps) => {
           >
             <HelpCircle size={16} />
             <span>Ajuda</span>
-          </NavLink>
+          </NavLink> */}
 
           <NavLink
             to="/logout"
@@ -176,7 +176,7 @@ export const Layout = ({ children }: LayoutProps) => {
           <aside className="fixed left-0 top-0 h-screen w-64 bg-blue-700 text-white flex flex-col z-50 md:hidden">
             <div className="px-6 py-5 border-b border-blue-500 flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-lg font-semibold tracking-tight">Meu Salão</span>
+                <span className="text-lg font-semibold tracking-tight">Gestão Piscinas</span>
                 <span className="text-xs text-blue-200">Painel de gestão</span>
               </div>
               <button onClick={closeMobileMenu} className="text-white">
@@ -217,7 +217,7 @@ export const Layout = ({ children }: LayoutProps) => {
               </NavLink>
 
               <NavLink
-                to="/eventos"
+                to="/Eventos"
                 onClick={closeMobileMenu}
                 className={({ isActive }) =>
                   `flex items-center gap-2 rounded-md px-3 py-2 transition ${
@@ -278,7 +278,7 @@ export const Layout = ({ children }: LayoutProps) => {
             </nav>
 
             <div className="border-t border-blue-600 px-3 py-3 text-sm space-y-1">
-              <NavLink
+              {/* <NavLink
                 to="/ajuda"
                 onClick={closeMobileMenu}
                 className={({ isActive }) =>
@@ -291,7 +291,7 @@ export const Layout = ({ children }: LayoutProps) => {
               >
                 <HelpCircle size={16} />
                 <span>Ajuda</span>
-              </NavLink>
+              </NavLink> */}
 
               <button
                 onClick={async () => {
@@ -321,7 +321,7 @@ export const Layout = ({ children }: LayoutProps) => {
           </button>
 
           <span className="text-xs md:text-sm text-slate-500 hidden md:block">
-            Meu Salão /{" "}
+            Gestão Piscinas /{" "}
             <span className="font-semibold text-slate-800">Painel</span>
           </span>
 

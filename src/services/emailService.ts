@@ -17,7 +17,7 @@ export async function sendSupportEmail({
     const formData = new FormData();
     formData.append('name', name);
     formData.append('email', from);
-    formData.append('subject', `[Suporte Meu Salão] ${subject}`);
+    formData.append('subject', `[Suporte Gestão Piscinas] ${subject}`);
     formData.append('message', message);
     formData.append('_template', 'box'); // Template bonito
     formData.append('_captcha', 'false'); // Desabilitar captcha

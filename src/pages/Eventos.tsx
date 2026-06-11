@@ -21,7 +21,7 @@ import { useNavigate } from "react-router-dom";
 export default function Eventos() {
   const location = useLocation();
   const locationShowForm = (location.state as any)?.showForm as boolean | undefined;
-  const { eventos, clientes, addEvento, updateEvento, removeEvento } = useAppContext();
+  const { Eventos, clientes, addEvento, updateEvento, removeEvento } = useAppContext();
   const { pacotes } = usePacotesContext();
   const { adicionais } = useAdicionaisContext();
   const { equipes } = useEquipesContext();
@@ -64,14 +64,14 @@ export default function Eventos() {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const filteredEventos = eventos.filter(evento =>
+  const filteredEventos = Eventos.filter(evento =>
     evento.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     evento.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
     evento.tipo.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const selectedEvento = selectedEventoId
-    ? eventos.find(e => e.id === selectedEventoId) ?? null
+    ? Eventos.find(e => e.id === selectedEventoId) ?? null
     : null;
 
   const handleInputChange = (field: keyof Evento, value: string | number | string[] | undefined) => {
@@ -430,7 +430,7 @@ export default function Eventos() {
   };
 
   const handleEditEvento = (id: string) => {
-    const ev = eventos.find(e => e.id === id);
+    const ev = Eventos.find(e => e.id === id);
     if (!ev) {
       console.warn("[handleEditEvento] Evento não encontrado:", id);
       return;
@@ -606,7 +606,7 @@ export default function Eventos() {
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-foreground">Eventos</h1>
         <p className="text-muted-foreground mt-2">
-          Gerencie seus eventos e festas
+          Gerencie seus Eventos e festas
         </p>
       </div>
 

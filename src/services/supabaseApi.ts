@@ -197,7 +197,7 @@ export async function updateClienteApi(
   }
 }
 
-// --- EVENTOS ---
+// --- Eventos ---
 
 export async function getEventosApi(): Promise<Evento[]> {
   try {
@@ -208,7 +208,7 @@ export async function getEventosApi(): Promise<Evento[]> {
     const startTime = performance.now();
 
     const { data, error } = await supabase
-      .from("eventos")
+      .from("Eventos")
       .select("*")
       .eq("user_id", userId)
       .order("data", { ascending: false });
@@ -217,7 +217,7 @@ export async function getEventosApi(): Promise<Evento[]> {
     console.log(`[getEventosApi] Busca concluída em ${(endTime - startTime).toFixed(2)}ms. Eventos encontrados: ${data?.length || 0}`);
 
     if (error) {
-      console.error("[getEventosApi] Erro ao buscar eventos:", error);
+      console.error("[getEventosApi] Erro ao buscar Eventos:", error);
       return [];
     }
 
@@ -226,7 +226,7 @@ export async function getEventosApi(): Promise<Evento[]> {
       return [];
     }
 
-    // Buscar aniversariantes para todos os eventos
+    // Buscar aniversariantes para todos os Eventos
     const eventoIds = data.map(e => e.id);
     const { data: aniversariantesData, error: anivError } = await supabase
       .from("evento_aniversariantes")
@@ -278,7 +278,7 @@ export async function getEventosApi(): Promise<Evento[]> {
       equipeProfissionais: ev.equipe_profissionais || [],
     } as Evento));
 
-    console.log("[getEventosApi] Mapeamento concluído:", mapped.length, "eventos");
+    console.log("[getEventosApi] Mapeamento concluído:", mapped.length, "Eventos");
     return mapped;
   } catch (err) {
     console.error("[getEventosApi] Exception:", err);
@@ -295,7 +295,7 @@ export async function createEventoApi(
 
     // 1. Inserir evento principal (SEM os campos JSONB)
     const { data: eventoData, error: eventoError } = await supabase
-      .from("eventos")
+      .from("Eventos")
       .insert({
         user_id: userId,
         titulo: evento.titulo,
@@ -426,7 +426,7 @@ export async function updateEventoApi(
       return null;
     }
 
-    // Preparar patch apenas com campos da tabela eventos (sem arrays relacionados)
+    // Preparar patch apenas com campos da tabela Eventos (sem arrays relacionados)
     const dbPatch: any = {};
     if (patch.titulo !== undefined) dbPatch.titulo = patch.titulo;
     if (patch.clienteId !== undefined) dbPatch.cliente_id = patch.clienteId;
@@ -446,7 +446,7 @@ export async function updateEventoApi(
     if (patch.formaPagamento !== undefined) dbPatch.forma_pagamento = patch.formaPagamento;
 
     const { data, error } = await supabase
-      .from("eventos")
+      .from("Eventos")
       .update(dbPatch)
       .eq("id", id)
       .eq("user_id", userId)
@@ -504,7 +504,7 @@ export async function deleteEventoApi(id: string): Promise<void> {
     }
 
     const { error } = await supabase
-      .from("eventos")
+      .from("Eventos")
       .delete()
       .eq("id", id)
       .eq("user_id", userId);

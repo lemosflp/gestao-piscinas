@@ -16,13 +16,13 @@ export interface Cliente {
   createdAt: string;       // timestamptz (public.clientes.created_at)
 }
 
-// Evento principal (public.eventos) + campos agregados das tabelas
+// Evento principal (public.Eventos) + campos agregados das tabelas
 // evento_aniversariantes, evento_adicionais, evento_adicionais_observacoes,
 // evento_adicionais_quantidade, evento_equipe_profissionais.
 export interface Evento {
-  id: string;              // uuid (public.eventos.id)
+  id: string;              // uuid (public.Eventos.id)
   titulo: string;
-  clienteId: string;       // uuid (public.eventos.cliente_id)
+  clienteId: string;       // uuid (public.Eventos.cliente_id)
   clienteNome: string;
   data: string;            // date -> string yyyy-MM-dd
   horaInicio: string;      // time -> string HH:mm
@@ -31,13 +31,13 @@ export interface Evento {
   status: 'confirmado' | 'pendente' | 'cancelado';
   observacoes?: string;
   valor: number;           // numeric(12,2)
-  pacoteId?: string;       // uuid (public.eventos.pacote_id)
+  pacoteId?: string;       // uuid (public.Eventos.pacote_id)
   convidados?: number;     // integer
   decoracao?: string;
-  equipeId?: string;       // uuid (public.eventos.equipe_id)
+  equipeId?: string;       // uuid (public.Eventos.equipe_id)
   valorEntrada?: number;   // numeric(12,2)
   formaPagamento?: string;
-  userId: string;          // uuid (public.eventos.user_id -> auth.users.id)
+  userId: string;          // uuid (public.Eventos.user_id -> auth.users.id)
 
   // Derivados de tabelas auxiliares ------------------------
 

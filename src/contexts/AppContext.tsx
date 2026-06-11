@@ -13,7 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 type AppContextValue = {
   clientes: Cliente[];
-  eventos: Evento[];
+  Eventos: Evento[];
   addCliente: (data: Omit<Cliente, "id" | "userId" | "createdAt">) => Promise<void>;
   updateCliente: (id: string, patch: Partial<Cliente>) => Promise<void>;
   addEvento: (data: Omit<Evento, "id" | "userId">) => Promise<void>;
@@ -26,7 +26,7 @@ const AppContext = createContext<AppContextValue | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [eventos, setEventos] = useState<Evento[]>([]);
+  const [Eventos, setEventos] = useState<Evento[]>([]);
   const [loadingEventos, setLoadingEventos] = useState(false);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setLoadingEventos(true);
 
         const startTime = performance.now();
-        const [clientesDb, eventosDb] = await Promise.all([
+        const [clientesDb, EventosDb] = await Promise.all([
           getClientesApi(),
           getEventosApi(),
         ]);
@@ -50,10 +50,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         console.log(`[AppContext] Carregamento concluído em ${(endTime - startTime).toFixed(2)}ms`);
         console.log("[AppContext] Clientes carregados:", clientesDb.length);
-        console.log("[AppContext] Eventos carregados:", eventosDb.length);
+        console.log("[AppContext] Eventos carregados:", EventosDb.length);
 
         setClientes(clientesDb);
-        setEventos(eventosDb);
+        setEventos(EventosDb);
       } catch (err) {
         console.error("[AppContext] Erro ao carregar dados:", err);
       } finally {
@@ -108,7 +108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         clientes,
-        eventos,
+        Eventos,
         addCliente,
         updateCliente,
         addEvento,

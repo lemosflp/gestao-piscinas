@@ -11,7 +11,7 @@ import { usePacotesContext } from "@/contexts/PacotesContext";
 import * as XLSX from "xlsx";
 
 export default function Relatorios() {
-  const { eventos } = useAppContext();
+  const { Eventos } = useAppContext();
   const { pacotes } = usePacotesContext();
 
   // Estado dos filtros
@@ -24,18 +24,18 @@ export default function Relatorios() {
   // Gerar lista de anos disponíveis
   const availableYears = useMemo(() => {
     const years = new Set<number>();
-    eventos.forEach(ev => {
+    Eventos.forEach(ev => {
       const year = parseISO(ev.data).getFullYear();
       years.add(year);
     });
-    // Adiciona ano atual se não houver eventos
+    // Adiciona ano atual se não houver Eventos
     years.add(new Date().getFullYear());
     return Array.from(years).sort((a, b) => b - a);
-  }, [eventos]);
+  }, [Eventos]);
 
-  // Filtrar eventos baseado nos critérios
+  // Filtrar Eventos baseado nos critérios
   const filteredEventos = useMemo(() => {
-    let result = [...eventos];
+    let result = [...Eventos];
 
     switch (reportType) {
       case "por-ano":
@@ -93,14 +93,14 @@ export default function Relatorios() {
     }
 
     return result;
-  }, [eventos, reportType, selectedYear, selectedMonth, selectedPackage, selectedStatus]);
+  }, [Eventos, reportType, selectedYear, selectedMonth, selectedPackage, selectedStatus]);
 
   // Cálculos
   const totalReceita = filteredEventos.reduce((total, ev) => total + (ev.valor || 0), 0);
   const totalEntradas = filteredEventos.reduce((total, ev) => total + (ev.valorEntrada || 0), 0);
   const totalSaldo = totalReceita - totalEntradas;
-  const eventosConfirmados = filteredEventos.filter(ev => ev.status === "confirmado").length;
-  const eventosPendentes = filteredEventos.filter(ev => ev.status === "pendente").length;
+  const EventosConfirmados = filteredEventos.filter(ev => ev.status === "confirmado").length;
+  const EventosPendentes = filteredEventos.filter(ev => ev.status === "pendente").length;
 
   // Receita por pacote
   const receitaPorPacote = useMemo(() => {
@@ -121,7 +121,7 @@ export default function Relatorios() {
 
   // Função para baixar relatório como CSV
   const downloadRelatorio = () => {
-    let csv = "RELATÓRIO DE EVENTOS\n";
+    let csv = "RELATÓRIO DE Eventos\n";
     csv += `Gerado em: ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}\n\n`;
 
     csv += "RESUMO GERAL\n";
@@ -135,14 +135,14 @@ export default function Relatorios() {
         : "Geral"
     }\n`;
     csv += `Total de Eventos: ${filteredEventos.length}\n`;
-    csv += `Confirmados: ${eventosConfirmados}\n`;
-    csv += `Pendentes: ${eventosPendentes}\n`;
+    csv += `Confirmados: ${EventosConfirmados}\n`;
+    csv += `Pendentes: ${EventosPendentes}\n`;
     csv += `Receita Total: R$ ${totalReceita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
     csv += `Entradas: R$ ${totalEntradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
     csv += `Saldo: R$ ${totalSaldo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n`;
     csv += `Média por Evento: R$ ${mediaValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}\n\n`;
 
-    csv += "DETALHES DOS EVENTOS\n";
+    csv += "DETALHES DOS Eventos\n";
     csv += "Data,Título,Cliente,Pacote,Status,Convidados,Valor,Entrada\n";
     filteredEventos.forEach(ev => {
       const pacote = pacotes.find(p => p.id === ev.pacoteId)?.nome || "N/A";
@@ -194,13 +194,13 @@ export default function Relatorios() {
           : "Geral"
       ],
       ["Total de Eventos", filteredEventos.length],
-      ["Confirmados", eventosConfirmados],
-      ["Pendentes", eventosPendentes],
+      ["Confirmados", EventosConfirmados],
+      ["Pendentes", EventosPendentes],
       ["Receita Total", `R$ ${totalReceita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`],
       ["Entradas", `R$ ${totalEntradas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`],
       ["Saldo", `R$ ${totalSaldo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`],
       ["Média por Evento", `R$ ${mediaValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`],
-      ["Taxa de Confirmação", `${filteredEventos.length > 0 ? ((eventosConfirmados / filteredEventos.length) * 100).toFixed(0) : "0"}%`]
+      ["Taxa de Confirmação", `${filteredEventos.length > 0 ? ((EventosConfirmados / filteredEventos.length) * 100).toFixed(0) : "0"}%`]
     ];
 
     const wsResumo = XLSX.utils.aoa_to_sheet(resumo);
@@ -376,7 +376,7 @@ export default function Relatorios() {
           <CardContent>
             <div className="text-2xl font-bold text-blue-600">{filteredEventos.length}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              {eventosConfirmados} confirmados, {eventosPendentes} pendentes
+              {EventosConfirmados} confirmados, {EventosPendentes} pendentes
             </p>
           </CardContent>
         </Card>
@@ -450,11 +450,11 @@ export default function Relatorios() {
           <CardContent>
             <div className="text-2xl font-bold text-cyan-600">
               {filteredEventos.length > 0
-                ? `${((eventosConfirmados / filteredEventos.length) * 100).toFixed(0)}%`
+                ? `${((EventosConfirmados / filteredEventos.length) * 100).toFixed(0)}%`
                 : "0%"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              De todos os eventos
+              De todos os Eventos
             </p>
           </CardContent>
         </Card>

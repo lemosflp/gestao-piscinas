@@ -25,6 +25,8 @@ const queryClient = new QueryClient();
 function PrivateRoutes() {
   const { user, loading } = useAuth();
 
+  /* 
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -36,14 +38,15 @@ function PrivateRoutes() {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+  */
 
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/calendario" element={<Calendario />} />
-        <Route path="/eventos" element={<Eventos />} />
-        <Route path="/propostas" element={<Pacotes />} />
+        <Route path="/Eventos" element={<Eventos />} />
+        {/* <Route path="/propostas" element={<Pacotes />} /> */}
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/ajuda" element={<Ajuda />} />

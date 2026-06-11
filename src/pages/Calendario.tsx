@@ -54,12 +54,12 @@ type EventoCalendario = Evento & {
 
 export default function Calendario() {
   const navigate = useNavigate();
-  const { eventos } = useAppContext(); // <<< AQUI: usa os mesmos eventos do contexto
+  const { Eventos } = useAppContext(); // <<< AQUI: usa os mesmos Eventos do contexto
   const [currentDate, setCurrentDate] = useState(() => normalizeDate(new Date()));
 
-  // Normaliza eventos do contexto
-  const eventosProcessados = useMemo<EventoCalendario[]>(() => {
-    const result = eventos.map((evento, idx) => {
+  // Normaliza Eventos do contexto
+  const EventosProcessados = useMemo<EventoCalendario[]>(() => {
+    const result = Eventos.map((evento, idx) => {
       // no Evento, `data` é string ISO do input type="date"
       const dataBase = parseDataEvento(String(evento.data));
 
@@ -75,9 +75,9 @@ export default function Calendario() {
       };
     });
 
-    console.log("eventosProcessados (Calendario, contexto):", result);
+    console.log("EventosProcessados (Calendario, contexto):", result);
     return result;
-  }, [eventos]);
+  }, [Eventos]);
 
   // Semana atual
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 }); // domingo
@@ -86,15 +86,15 @@ export default function Calendario() {
   );
   const dayLabels = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 
-  // eventos por dia da semana
-  const eventosPorDia: Record<string, EventoCalendario[]> = useMemo(() => {
+  // Eventos por dia da semana
+  const EventosPorDia: Record<string, EventoCalendario[]> = useMemo(() => {
     const map: Record<string, EventoCalendario[]> = {};
     weekDays.forEach((day) => {
       const key = day.toISOString();
       map[key] = [];
     });
 
-    eventosProcessados.forEach((ev) => {
+    EventosProcessados.forEach((ev) => {
       weekDays.forEach((day) => {
         if (isSameDay(ev.dataDate, day)) {
           const key = day.toISOString();
@@ -111,7 +111,7 @@ export default function Calendario() {
     });
 
     return map;
-  }, [eventosProcessados, weekDays]);
+  }, [EventosProcessados, weekDays]);
 
   const navigateWeek = (direction: "prev" | "next") => {
     const newDate = addDays(currentDate, direction === "next" ? 7 : -7);
@@ -123,12 +123,12 @@ export default function Calendario() {
   };
 
   const handleGoogleCalendarIntegration = () => {
-    if (eventosProcessados.length === 0) {
+    if (EventosProcessados.length === 0) {
       alert("Nenhum evento para adicionar ao Google Calendar");
       return;
     }
 
-    const firstEvent = eventosProcessados[0];
+    const firstEvent = EventosProcessados[0];
 
     const title = encodeURIComponent(firstEvent.titulo ?? "Evento");
     
@@ -155,7 +155,7 @@ export default function Calendario() {
   };
 
   const handleExportCalendar = () => {
-    if (eventosProcessados.length === 0) {
+    if (EventosProcessados.length === 0) {
       alert("Nenhum evento para exportar");
       return;
     }
@@ -179,7 +179,7 @@ END:STANDARD
 END:VTIMEZONE
 `;
 
-    eventosProcessados.forEach((ev) => {
+    EventosProcessados.forEach((ev) => {
       const startDate = format(ev.dataDate, "yyyyMMdd");
       const [hours, minutes] = (ev.horaInicio ?? "00:00").split(":");
       const startDateTime = `${startDate}T${hours}${minutes}00`;
@@ -243,7 +243,7 @@ END:VEVENT
   // mapa de dias do mês que têm pelo menos um evento
   const daysWithEventsInMonth = useMemo(() => {
     const map = new Set<number>();
-    eventosProcessados.forEach(ev => {
+    EventosProcessados.forEach(ev => {
       const d = ev.dataDate;
       if (
         d.getFullYear() === currentDate.getFullYear() &&
@@ -253,7 +253,7 @@ END:VEVENT
       }
     });
     return map;
-  }, [eventosProcessados, currentDate]);
+  }, [EventosProcessados, currentDate]);
 
   return (
     <div className="p-3 md:p-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
@@ -261,14 +261,14 @@ END:VEVENT
       <div className="mb-6 md:mb-8">
         <h1 className="text-2xl md:text-4xl font-bold text-foreground">Calendário</h1>
         <p className="text-sm md:text-base text-muted-foreground mt-2">
-          Visualize os eventos cadastrados na semana
+          Visualize os Eventos cadastrados na semana
         </p>
       </div>
 
       <div className="flex justify-end mb-6 md:mb-8">
         <Button
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-6 flex items-center gap-2 text-sm md:text-base"
-          onClick={() => navigate("/eventos", { state: { showForm: true } })}
+          onClick={() => navigate("/Eventos", { state: { showForm: true } })}
         >
           <Plus size={16} className="md:w-5 md:h-5" />
           <span className="hidden sm:inline">Cadastrar Evento</span>
@@ -349,8 +349,8 @@ END:VEVENT
               <div className="grid grid-cols-7 gap-1 md:gap-2 mb-6">
                 {weekDays.map((day, index) => {
                   const key = day.toISOString();
-                  const eventosDia = eventosPorDia[key] || [];
-                  const hasEventos = eventosDia.length > 0;
+                  const EventosDia = EventosPorDia[key] || [];
+                  const hasEventos = EventosDia.length > 0;
                   const isToday = isSameDay(day, normalizeDate(new Date()));
 
                   return (
@@ -375,7 +375,7 @@ END:VEVENT
                         </span>
                         {hasEventos && (
                           <span className="text-[10px] px-2 py-1 rounded-full bg-blue-600 text-white font-semibold">
-                            {eventosDia.length}
+                            {EventosDia.length}
                           </span>
                         )}
                       </div>
@@ -384,7 +384,7 @@ END:VEVENT
 
                       {/* Eventos (horários) na parte de baixo */}
                       <div className="space-y-1 mt-2">
-                        {eventosDia.map((evento) => (
+                        {EventosDia.map((evento) => (
                           <div
                             key={evento.id}
                             className={`text-[10px] sm:text-xs px-2 py-1 rounded font-semibold text-center truncate ${getTipoColor(
@@ -406,14 +406,14 @@ END:VEVENT
                 })}
               </div>
 
-              {/* Lista dos eventos da semana */}
+              {/* Lista dos Eventos da semana */}
               <div className="space-y-4 mt-8 pt-6 border-t-2 border-slate-200">
                 <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
                   <Calendar size={18} className="text-blue-600" />
                   Eventos desta semana
                 </h3>
                 <div className="space-y-2">
-                  {eventosProcessados
+                  {EventosProcessados
                     .filter((ev) =>
                       weekDays.some((day) => isSameDay(ev.dataDate, day))
                     )
@@ -477,7 +477,7 @@ END:VEVENT
                         </div>
                       </div>
                     ))}
-                  {eventosProcessados.filter((ev) =>
+                  {EventosProcessados.filter((ev) =>
                     weekDays.some((day) => isSameDay(ev.dataDate, day))
                   ).length === 0 && (
                     <div className="text-center py-8 text-slate-500">
@@ -559,7 +559,7 @@ END:VEVENT
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-slate-700">Com eventos</span>
+                  <span className="text-slate-700">Com Eventos</span>
                 </div>
               </div>
             </CardContent>

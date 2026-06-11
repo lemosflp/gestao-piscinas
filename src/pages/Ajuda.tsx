@@ -37,7 +37,7 @@ export default function Ajuda() {
     },
     {
       question: "Como gerenciar propostas e adicionais?",
-      answer: "Na seção 'Propostas, Adicionais e Equipes' você pode criar e gerenciar todos os componentes dos seus eventos.",
+      answer: "Na seção 'Propostas, Adicionais e Equipes' você pode criar e gerenciar todos os componentes dos seus Eventos.",
       category: "Propostas"
     },
     {
@@ -46,8 +46,8 @@ export default function Ajuda() {
       category: "Eventos"
     },
     {
-      question: "Como visualizar o calendário de eventos?",
-      answer: "Acesse a seção 'Calendário' para visualizar todos os eventos organizados por data com filtros por status.",
+      question: "Como visualizar o calendário de Eventos?",
+      answer: "Acesse a seção 'Calendário' para visualizar todos os Eventos organizados por data com filtros por status.",
       category: "Calendário"
     }
   ];

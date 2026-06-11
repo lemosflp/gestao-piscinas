@@ -52,7 +52,7 @@ export default function Login() {
               em um só lugar.
             </h1>
             <p className="text-sm text-blue-100/90 leading-relaxed">
-              Acompanhe eventos, clientes e propostas de forma simples,
+              Acompanhe Eventos, clientes e propostas de forma simples,
               sem planilhas espalhadas.
             </p>
           </main>

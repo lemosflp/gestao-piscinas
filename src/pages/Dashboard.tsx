@@ -13,60 +13,53 @@ import { Package, TrendingUp } from "lucide-react";
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { clientes, eventos } = useAppContext();
+  const { clientes, Eventos } = useAppContext();
   const { pacotes } = usePacotesContext();
   const { adicionais } = useAdicionaisContext();
   const [showFinancialValues, setShowFinancialValues] = useState(false);
 
   // métricas simples
   const totalClientes = clientes.length;
-  const totalEventos = eventos.length;
-  const totalConfirmados = eventos.filter(e => e.status === "confirmado").length;
-  const totalPendentes = eventos.filter(e => e.status === "pendente").length;
+  const totalEventos = Eventos.length;
+  const totalConfirmados = Eventos.filter(e => e.status === "confirmado").length;
+  const totalPendentes = Eventos.filter(e => e.status === "pendente").length;
 
   const faturamentoEstimado = useMemo(
-    () => eventos.reduce((sum, e) => sum + (e.valor || 0), 0),
-    [eventos]
+    () => Eventos.reduce((sum, e) => sum + (e.valor || 0), 0),
+    [Eventos]
   );
 
   const proximosEventos = useMemo(() => {
     const now = new Date();
-    return [...eventos]
+    return [...Eventos]
       .filter(e => isAfter(parseISO(e.data), now))
       .sort((a, b) => parseISO(a.data).getTime() - parseISO(b.data).getTime())
       .slice(0, 4);
-  }, [eventos]);
+  }, [Eventos]);
 
   // Calcular valores do mês atual
   const currentMonth = new Date().getMonth() + 1;
   const currentYear = new Date().getFullYear();
   
-  const eventosDoMes = useMemo(() => {
-    return eventos.filter(e => {
+  const EventosDoMes = useMemo(() => {
+    return Eventos.filter(e => {
       const date = parseISO(e.data);
       return date.getMonth() + 1 === currentMonth && date.getFullYear() === currentYear;
     });
-  }, [eventos]);
+  }, [Eventos]);
 
   const faturamentoMes = useMemo(
-    () => eventosDoMes.reduce((sum, e) => sum + (e.valor || 0), 0),
-    [eventosDoMes]
+    () => EventosDoMes.reduce((sum, e) => sum + (e.valor || 0), 0),
+    [EventosDoMes]
   );
 
   const entradasMes = useMemo(
-    () => eventosDoMes.reduce((sum, e) => sum + (e.valorEntrada || 0), 0),
-    [eventosDoMes]
+    () => EventosDoMes.reduce((sum, e) => sum + (e.valorEntrada || 0), 0),
+    [EventosDoMes]
   );
 
   const saldoMes = faturamentoMes - entradasMes;
-
-  const stats = [
-    { label: "Total de Clientes", value: clientes.length, icon: Users, color: "bg-blue-600" },
-    { label: "Eventos Cadastrados", value: eventos.length, icon: Calendar, color: "bg-blue-500" },
-    { label: "Propostas Ativas", value: pacotes.length, icon: Package, color: "bg-blue-700" },
-    { label: "Adicionais", value: adicionais.length, icon: TrendingUp, color: "bg-blue-600" },
-  ];
-
+  
   return (
     <div className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
       {/* Header */}
@@ -75,27 +68,6 @@ export default function Dashboard() {
         <p className="text-muted-foreground mt-2">Bem-vindo ao seu painel de controle</p>
       </div>
 
-      {/* Cards de Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {stats.map((stat, idx) => {
-          const Icon = stat.icon;
-          return (
-            <Card key={idx} className="border-l-4 border-l-blue-600 shadow-lg hover:shadow-xl transition">
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide">{stat.label}</p>
-                    <p className="text-3xl font-bold text-foreground mt-2">{stat.value}</p>
-                  </div>
-                  <div className={`${stat.color} p-3 rounded-lg`}>
-                    <Icon size={24} className="text-white" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
 
       {/* Grid de conteúdo */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -114,7 +86,7 @@ export default function Dashboard() {
                 <Button
                   size="sm"
                   className="mt-3 bg-blue-600 hover:bg-blue-700 text-white"
-                  onClick={() => navigate("/eventos")}
+                  onClick={() => navigate("/Eventos")}
                 >
                   + Cadastrar Evento
                 </Button>
@@ -214,7 +186,7 @@ export default function Dashboard() {
             <Button
               variant="outline"
               className="border-blue-300 text-blue-700 hover:bg-blue-50"
-              onClick={() => navigate("/eventos")}
+              onClick={() => navigate("/Eventos")}
             >
               + Novo Evento
             </Button>
@@ -228,9 +200,9 @@ export default function Dashboard() {
             <Button
               variant="outline"
               className="border-blue-300 text-blue-700 hover:bg-blue-50"
-              onClick={() => navigate("/propostas")}
+              onClick={() => navigate("/Relatorios")}
             >
-              Gerenciar Propostas
+              Gerar Relatório
             </Button>
             <Button
               variant="outline"
