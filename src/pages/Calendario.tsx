@@ -62,7 +62,7 @@ export default function Calendario() {
 
   const EventosProcessados = useMemo<EventoCalendario[]>(() => {
     const result = servicos.map((evento: any, idx) => {
-      // data field is data (YYYY-MM-DD)
+      // data field is data (YYYY-MM-DD):
       const dataBase = parseDataEvento(String(evento.data || evento.data_agendamento || ""));
       const horaStr = evento.horario || evento.hora || evento.horaInicio || "";
       const { h, m } = parseHoraEvento(horaStr as string);
@@ -293,7 +293,7 @@ END:VEVENT
       <div className="flex justify-end mb-6 md:mb-8">
         <Button
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 md:px-6 flex items-center gap-2 text-sm md:text-base"
-          onClick={() => navigate("/Eventos", { state: { showForm: true } })}
+          onClick={() => navigate(`/Eventos?showForm=true`)}
         >
           <Plus size={16} className="md:w-5 md:h-5" />
           <span className="hidden sm:inline">Cadastrar Evento</span>
@@ -412,7 +412,7 @@ END:VEVENT
                         {EventosDia.map((evento) => (
                           <div
                             key={evento.id}
-                                                    onClick={() => navigate('/Eventos', { state: { showForm: true, editId: evento.id } })}
+                                                    onClick={() => navigate(`/Eventos?viewId=${evento.id}`)}
                                                     className={`cursor-pointer text-[10px] sm:text-xs px-2 py-1 rounded font-semibold text-center truncate ${getTipoColor(
                                                       evento.tipo
                                                     )}`}
@@ -450,7 +450,7 @@ END:VEVENT
                     .map((ev) => (
                       <div
                         key={ev.id}
-                        onClick={() => navigate('/eventos', { state: { showForm: true, editId: ev.id } })}
+                        onClick={() => navigate('/eventos', { state: { showForm: false, selectedServico: true, pagamentoModal: false, viewId: ev.id } })}
                         className="cursor-pointer flex items-center gap-4 p-3 border border-blue-200 rounded-lg hover:shadow-md hover:border-blue-400 bg-white transition-all"
                       >
                         <div

@@ -49,7 +49,7 @@ function PrivateRoutes() {
         {/* <Route path="/propostas" element={<Pacotes />} /> */}
         <Route path="/test-cliente" element={<TestClienteForm />} />
         <Route path="/clientes" element={<Clientes />} />
-        <Route path="/relatorios" element={<Relatorios />} />
+        {/* <Route path="/relatorios" element={<Relatorios />} /> */}
         <Route path="/ajuda" element={<Ajuda />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />

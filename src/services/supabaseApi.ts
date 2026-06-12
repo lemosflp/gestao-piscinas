@@ -537,7 +537,7 @@ export async function getServicosApi() {
 
     const { data, error } = await supabase
       .from('servicos')
-      .select('id, user_id, client_id, cliente_id, piscina_id, tipo_servico, data_agendamento, horario, status, observacoes, created_at')
+      .select('id, user_id, client_id, client_id, piscina_id, tipo_servico, data_agendamento, horario, status, observacoes, created_at')
       .eq('user_id', userId)
       .order('data_agendamento', { ascending: true });
 
@@ -547,7 +547,7 @@ export async function getServicosApi() {
     }
 
     const servicos = data || [];
-    const clienteIds = Array.from(new Set(servicos.map((s:any) => s.client_id || s.cliente_id).filter(Boolean)));
+    const clienteIds = Array.from(new Set(servicos.map((s:any) => s.client_id || s.client_id).filter(Boolean)));
     const piscinaIds = Array.from(new Set(servicos.map((s:any) => s.piscina_id).filter(Boolean)));
 
     const clientesMap: Record<string, any> = {};
@@ -573,8 +573,8 @@ export async function getServicosApi() {
     return (servicos as any[]).map(s => ({
       id: s.id,
       userId: s.user_id,
-      clienteId: s.client_id || s.cliente_id,
-      clienteNome: clientesMap[s.client_id || s.cliente_id] ? `${clientesMap[s.client_id || s.cliente_id].nome} ${clientesMap[s.client_id || s.cliente_id].sobrenome}` : '',
+      clienteId: s.client_id || s.client_id,
+      clienteNome: clientesMap[s.client_id || s.client_id] ? `${clientesMap[s.client_id || s.client_id].nome} ${clientesMap[s.client_id || s.client_id].sobrenome}` : '',
       piscinaId: s.piscina_id,
       piscina: piscinasMap[s.piscina_id] || null,
       tipoServico: s.tipo_servico,

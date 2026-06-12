@@ -111,7 +111,7 @@ export const Layout = ({ children }: LayoutProps) => {
             <span>Clientes</span>
           </NavLink>
 
-          <NavLink
+          {/* <NavLink
             to="/relatorios"
             className={({ isActive }) =>
               `flex items-center gap-2 rounded-md px-3 py-2 transition ${
@@ -123,7 +123,7 @@ export const Layout = ({ children }: LayoutProps) => {
           >
             <FileText size={16} />
             <span>Relatórios</span>
-          </NavLink>
+          </NavLink> */}
         </nav>
 
         {/* rodapé: Conta / Ajuda / Sair */}

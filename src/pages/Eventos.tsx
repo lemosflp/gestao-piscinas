@@ -116,10 +116,23 @@ const PAGAMENTO_FORM_INITIAL: NovoPagamentoForm = {
 
 export default function Eventos() {
   const location = useLocation();
+  // support both location.state and URL search params (?viewId=...&showForm=true&editId=...)
   const locationShowForm = (location.state as any)?.showForm as boolean | undefined;
   const locationEditId = (location.state as any)?.editId as string | undefined;
+  const locationViewId = (location.state as any)?.viewId as string | undefined;
+  const params = new URLSearchParams(location.search);
+  const paramShowForm = params.get("showForm") === "true";
+  const paramEditId = params.get("editId") ?? undefined;
+  const paramViewId = params.get("viewId") ?? undefined;
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // initial showForm considers both sources
+  const [showForm, setShowForm] = useState(!!locationShowForm || paramShowForm);
+  // will set editing/service selections later based on params/state
+  const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
+  const [selectedServicoId, setSelectedServicoId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<FormData>(FORM_INITIAL);
 
   // --- data ---
   const [clientes, setClientes] = useState<Cliente[]>([]);
@@ -131,10 +144,6 @@ export default function Eventos() {
 
   // --- ui ---
   const [searchTerm, setSearchTerm] = useState("");
-  const [showForm, setShowForm] = useState(!!locationShowForm);
-  const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
-  const [selectedServicoId, setSelectedServicoId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormData>(FORM_INITIAL);
 
   // --- pagamentos modal ---
   const [pagamentoModal, setPagamentoModal] = useState<{
@@ -153,6 +162,7 @@ export default function Eventos() {
   const showFormRef = useRef<HTMLDivElement>(null);
   const selectedRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const pagamentoModalRef = useRef<HTMLDivElement>(null);
 
   // ---------------------------------------------------------------------------
   // Load clientes
@@ -528,14 +538,33 @@ export default function Eventos() {
   // If navigation provided an editId in location.state (from the calendar), open the form
   // once services have been loaded so the requested service can be found.
   // This runs after fetchServicos populated `servicos`.
+  // Compute effective ids considering both location.state and URL params
+  const effectiveEditId = locationEditId || paramEditId;
+  const effectiveViewId = locationViewId || paramViewId;
+
   useEffect(() => {
-    if (!locationEditId) return;
+    // If a viewId was requested, prefer viewing over editing
+    if (effectiveViewId) return;
+    if (!effectiveEditId) return;
     if (!servicos || servicos.length === 0) return;
-    const exists = servicos.some(s => s.id === locationEditId);
+    const exists = servicos.some(s => s.id === effectiveEditId);
     if (exists) {
-      handleEditServico(locationEditId);
+      handleEditServico(effectiveEditId);
     }
-  }, [locationEditId, servicos]);
+  }, [effectiveEditId, effectiveViewId, servicos]);
+
+  // If navigation provided a viewId (from the calendar or URL), open the details panel
+  useEffect(() => {
+    if (!effectiveViewId) return;
+    if (!servicos || servicos.length === 0) return;
+    const exists = servicos.some(s => s.id === effectiveViewId);
+    if (exists) {
+      setSelectedServicoId(effectiveViewId);
+      setShowForm(false);
+      setEditingServicoId(null);
+      fetchCobrancaDoServico(effectiveViewId);
+    }
+  }, [effectiveViewId, servicos]);
 
   function handleCancelForm() {
     setShowForm(false);

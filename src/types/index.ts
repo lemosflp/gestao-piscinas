@@ -20,7 +20,7 @@ export interface Cliente {
 
 export interface Piscina {
   id: string;               // uuid (piscinas.id)
-  cliente_id: string;       // pode ser client_id ou cliente_id no DB; usar cliente_id no front
+  client_id: string;       // pode ser client_id ou client_id no DB; usar client_id no front
   tipo?: string | null;
   tamanho?: string | null;
   endereco?: string | null;
@@ -32,7 +32,7 @@ export interface Piscina {
 export interface Servico {
   id: string;               // uuid (servicos.id)
   user_id?: string | null;
-  cliente_id: string;
+  client_id: string;
   piscina_id: string;
   tipo_servico?: string | null;
   data_agendamento?: string | null; // yyyy-MM-dd
@@ -49,7 +49,7 @@ export interface Servico {
 export interface Cobranca {
   id: string;               // uuid (cobrancas.id)
   user_id?: string | null;
-  cliente_id?: string | null;
+  client_id?: string | null;
   servico_id?: string | null;
   valor?: number | null;
   data_vencimento?: string | null; // yyyy-MM-dd
