@@ -378,6 +378,156 @@ export async function updateClienteApi(
   }
 }
 
+// --- Serviços / Pagamentos (novo fluxo para /Eventos página que agora será Serviços) ---
+
+export async function getClientesSummary(): Promise<{id:string, nome:string, sobrenome:string}[]> {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from('clientes')
+      .select('id, nome, sobrenome')
+      .eq('user_id', userId)
+      .order('nome', { ascending: true });
+    if (error) {
+      console.error('[getClientesSummary] Erro:', error);
+      return [];
+    }
+    return (data || []).map((c:any)=>({id:c.id, nome:c.nome, sobrenome:c.sobrenome}));
+  } catch(err){
+    console.error('[getClientesSummary] Exception:', err);
+    return [];
+  }
+}
+
+export async function getClienteWithPiscinas(clienteId: string){
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+    const { data: clienteData, error: clienteError } = await supabase
+      .from('clientes')
+      .select('id, nome, sobrenome, email, numero_celular, endereco')
+      .eq('id', clienteId)
+      .eq('user_id', userId)
+      .single();
+    if (clienteError) {
+      console.error('[getClienteWithPiscinas] Erro ao buscar cliente:', clienteError);
+      return null;
+    }
+
+    const { data: piscinasData, error: piscinasError } = await supabase
+      .from('piscinas')
+      .select('id, client_id, tipo, tamanho, endereco')
+      .eq('user_id', userId)
+      .eq('client_id', clienteId);
+
+    if (piscinasError) {
+      console.error('[getClienteWithPiscinas] Erro ao buscar piscinas:', piscinasError);
+    }
+
+    return {
+      cliente: clienteData,
+      piscinas: piscinasData || [],
+    };
+  } catch(err){
+    console.error('[getClienteWithPiscinas] Exception:', err);
+    return null;
+  }
+}
+
+/**
+ * Cria servico + cobranca + pagamento (opcional) em sequência.
+ * Tenta rollback manual caso alguma etapa falhe para garantir atomicidade aproximada.
+ */
+export async function createServicoComCobrancaEPagamento(payload: {
+  clienteId: string;
+  piscinaId: string;
+  tipo_servico?: string | null;
+  data_agendamento?: string | null; // YYYY-MM-DD
+  horario?: string | null; // HH:MM
+  observacoes?: string | null;
+  valor: number | null; // valor da cobranca
+  data_vencimento?: string | null; // YYYY-MM-DD
+  valor_entrada?: number | null;
+  forma_pagamento?: string | null;
+}) {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) {
+      throw new Error('Usuário não autenticado');
+    }
+
+    // 1) inserir servico
+    const servPayload: any = {
+      user_id: userId,
+      client_id: payload.clienteId,
+      cliente_id: payload.clienteId, // compatibiliza possíveis nomes
+      piscina_id: payload.piscinaId,
+      tipo_servico: payload.tipo_servico ?? null,
+      data_agendamento: payload.data_agendamento ?? null,
+      horario: payload.horario ?? null,
+      status: 'agendado',
+      observacoes: payload.observacoes ?? null,
+    };
+
+    const { data: servData, error: servError } = await supabase.from('servicos').insert(servPayload).select('*').single();
+    if (servError || !servData) {
+      console.error('[createServico] Erro ao criar servico:', servError);
+      throw servError ?? new Error('Erro ao criar servico');
+    }
+    const servicoId = servData.id;
+
+    // 2) criar cobranca
+    const cobrancaPayload: any = {
+      user_id: userId,
+      client_id: payload.clienteId,
+      servico_id: servicoId,
+      valor: payload.valor ?? null,
+      data_vencimento: payload.data_vencimento ?? null,
+      status: 'pendente',
+    };
+
+    const { data: cobrData, error: cobrError } = await supabase.from('cobrancas').insert(cobrancaPayload).select('*').single();
+    if (cobrError || !cobrData) {
+      console.error('[createCobranca] Erro ao criar cobranca:', cobrError);
+      // rollback servico
+      await supabase.from('servicos').delete().eq('id', servicoId);
+      throw cobrError ?? new Error('Erro ao criar cobranca');
+    }
+    const cobrancaId = cobrData.id;
+
+    // 3) pagamento de entrada (opcional)
+    if (payload.valor_entrada && Number(payload.valor_entrada) > 0) {
+      const pagamentoPayload: any = {
+        user_id: userId,
+        cobranca_id: cobrancaId,
+        data_pagamento: new Date().toISOString().slice(0,10),
+        valor_pago: payload.valor_entrada,
+        forma_pagamento: payload.forma_pagamento ?? null,
+        observacoes: null,
+      };
+
+      const { data: pagData, error: pagError } = await supabase.from('pagamentos').insert(pagamentoPayload).select('*').single();
+      if (pagError || !pagData) {
+        console.error('[createPagamento] Erro ao criar pagamento:', pagError);
+        // rollback cobranca + servico
+        await supabase.from('cobrancas').delete().eq('id', cobrancaId);
+        await supabase.from('servicos').delete().eq('id', servicoId);
+        throw pagError ?? new Error('Erro ao criar pagamento');
+      }
+    }
+
+    // sucesso
+    return {
+      servico: servData,
+      cobranca: cobrData,
+    };
+  } catch (err) {
+    console.error('[createServicoComCobrancaEPagamento] Exception:', err);
+    throw err;
+  }
+}
+
 // --- Eventos ---
 
 export async function getEventosApi(): Promise<Evento[]> {

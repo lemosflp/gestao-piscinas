@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Search, Plus, Calendar, Clock, MapPin, Edit, CheckCircle2, Users } from "lucide-react";
 import { useAppContext } from "@/contexts/AppContext";
+import { getClientesSummary, getClienteWithPiscinas, createServicoComCobrancaEPagamento } from "@/services/supabaseApi";
 import { usePacotesContext } from "@/contexts/PacotesContext";
 import { useAdicionaisContext } from "@/contexts/AdicionaisContext";
 import { useEquipesContext } from "@/contexts/EquipesContext";
@@ -28,6 +29,22 @@ export default function Eventos() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(!!locationShowForm);
+
+  // --- novos estados para serviços ---
+  const [clientesList, setClientesList] = useState<{id:string,nome:string,sobrenome:string}[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedClientDetails, setSelectedClientDetails] = useState<any>(null);
+  const [piscinasList, setPiscinasList] = useState<any[]>([]);
+  const [selectedPiscinaId, setSelectedPiscinaId] = useState<string | null>(null);
+
+  const [tipoServico, setTipoServico] = useState("");
+  const [dataAgendamento, setDataAgendamento] = useState("");
+  const [horario, setHorario] = useState("");
+  const [valor, setValor] = useState<number | null>(null);
+  const [dataVencimento, setDataVencimento] = useState("");
+  const [valorEntrada, setValorEntrada] = useState<number | null>(null);
+  const [formaPagamento, setFormaPagamento] = useState("");
+  const [observacoesServico, setObservacoesServico] = useState("");
 
   const [editingEventoId, setEditingEventoId] = useState<string | null>(null);
   const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
@@ -78,7 +95,24 @@ export default function Eventos() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleClienteSelect = (clienteId: string) => {
+  const handleClienteSelect = async (clienteId: string) => {
+    // adaptar para uso no fluxo de servicos
+    setSelectedClientId(clienteId);
+    setSelectedClientDetails(null);
+    setPiscinasList([]);
+    setSelectedPiscinaId(null);
+
+    try {
+      const res = await getClienteWithPiscinas(clienteId);
+      if (res) {
+        setSelectedClientDetails(res.cliente);
+        setPiscinasList(res.piscinas || []);
+      }
+    } catch (err) {
+      console.error('[handleClienteSelect] Erro ao buscar cliente/piscinas:', err);
+    }
+
+    // também manter compatibilidade com o formulário de eventos antigo
     const cliente = clientes.find(c => c.id === clienteId);
     setFormData(prev => ({
       ...prev,
@@ -294,6 +328,19 @@ export default function Eventos() {
     }));
   }, [valorCalculado, selectedPacote, valorEditadoManualmente]);
 
+  // carregar lista de clientes para dropdown de serviços
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const clients = await getClientesSummary();
+        setClientesList(clients);
+      } catch (err) {
+        console.error('[Eventos] Erro ao carregar clientes summary:', err);
+      }
+    };
+    load();
+  }, []);
+
   const valorDigitado = formData.valor ?? 0;
   const diffValor = valorDigitado - valorCalculado;
   const hasDiffValor = Math.abs(diffValor) >= 0.01;
@@ -309,124 +356,65 @@ export default function Eventos() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const aniversariantesValidos = (formData.aniversariantes || []).filter(
-      a => a.nome && a.nome.trim()
-    );
-
-    if (
-      !formData.clienteId ||
-      !formData.pacoteId ||
-      !formData.data ||
-      !formData.horaInicio ||
-      !formData.formaPagamento ||
-      formData.convidados == null || formData.convidados === undefined || formData.convidados <= 0 ||
-      aniversariantesValidos.length === 0
-    ) {
-      toast({
-        title: "Erro no cadastro",
-        description:
-          "Preencha todos os campos obrigatórios (cliente, proposta, data, início, convidados, ao menos um aniversariante/homenageado e forma de pagamento).",
-        variant: "destructive",
-      });
+    // validar campos do fluxo de serviços
+    if (!selectedClientId) {
+      toast({ title: 'Cliente não selecionado', variant: 'destructive' });
+      return;
+    }
+    if (piscinasList.length > 0 && !selectedPiscinaId) {
+      toast({ title: 'Selecione a piscina do cliente', variant: 'destructive' });
+      return;
+    }
+    if (!tipoServico || !dataAgendamento || !horario) {
+      toast({ title: 'Preencha tipo, data e horário do serviço', variant: 'destructive' });
+      return;
+    }
+    if (valor == null || isNaN(Number(valor))) {
+      toast({ title: 'Informe o valor da cobrança', variant: 'destructive' });
+      return;
+    }
+    if (!dataVencimento) {
+      toast({ title: 'Informe a data de vencimento da cobrança', variant: 'destructive' });
       return;
     }
 
-    if (selectedPacote && (formData.convidados || 0) < selectedPacote.convidadosBase) {
-      toast({
-        title: "Número de convidados inválido",
-        description: `A proposta selecionada possui mínimo de ${selectedPacote.convidadosBase} convidados.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const payloadBase: Omit<Evento, "id"> = {
-      titulo:
-        (formData.titulo && formData.titulo.trim()) ||
-        (formData.clienteNome
-          ? `Evento - ${formData.clienteNome}`
-          : "Evento"),
-      clienteId: formData.clienteId!,
-      clienteNome: formData.clienteNome || "",
-      data: formData.data!,
-      horaInicio: formData.horaInicio!,
-      horaFim: formData.horaFim,
-      tipo: formData.tipo || "festa",
-      status: formData.status || "pendente",
-      observacoes: formData.observacoes || "",
-      valor: valorDigitado,
-      pacoteId: formData.pacoteId,
-      convidados: formData.convidados,
-      decoracao: formData.decoracao,
-      equipeId: formData.equipeId,
-      equipeProfissionais: eventoEquipeProfissionais,
-      adicionaisIds: formData.adicionaisIds || [],
-      valorEntrada: formData.valorEntrada || 0,
-      formaPagamento: formData.formaPagamento || "",
-      aniversariantes: aniversariantesValidos.map(a => ({
-        nome: a.nome.trim(),
-        idade:
-          a.idade !== undefined && a.idade !== null && a.idade !== 0
-            ? a.idade
-            : undefined,
-      })),
-      adicionaisObservacoes: (formData.adicionaisIds || [])
-        .map(adicionalId => {
-          const obs = adicionaisObservacoesMap[adicionalId];
-          if (!obs?.trim()) return null;
-          return { adicionalId, observacao: obs.trim() };
-        })
-        .filter(Boolean) as { adicionalId: string; observacao: string }[],
-      adicionaisQuantidade: (formData.adicionaisIds || [])
-        .map(adicionalId => ({
-          adicionalId,
-          quantidade: adicionaisQuantidadeMap[adicionalId] ?? 0,
-        }))
-        .filter(item => item.quantidade > 0),
+    const payload = {
+      clienteId: selectedClientId!,
+      piscinaId: selectedPiscinaId || (piscinasList[0]?.id ?? null),
+      tipo_servico: tipoServico || null,
+      data_agendamento: dataAgendamento || null,
+      horario: horario || null,
+      observacoes: observacoesServico || null,
+      valor: valor ?? null,
+      data_vencimento: dataVencimento || null,
+      valor_entrada: valorEntrada ?? null,
+      forma_pagamento: formaPagamento || null,
     };
 
-    if (editingEventoId) {
-      await updateEvento(editingEventoId, payloadBase);
-      toast({
-        title: "Evento atualizado com sucesso!",
-        description: `${payloadBase.titulo} foi atualizado.`,
-      });
-    } else {
-      await addEvento(payloadBase);
-      toast({
-        title: "Evento cadastrado com sucesso!",
-        description: `${payloadBase.titulo} foi adicionado ao calendário.`,
-      });
-    }
+    try {
+      const res = await createServicoComCobrancaEPagamento(payload);
+      console.log('[Eventos] createServico result:', res);
+      toast({ title: 'Serviço agendado', description: 'Serviço, cobrança e pagamento (se aplicável) criados com sucesso.' });
 
-    setShowForm(false);
-    setEditingEventoId(null);
-    setSelectedEventoId(null);
-    setFormData({
-      titulo: "",
-      clienteId: "",
-      clienteNome: "",
-      data: "",
-      horaInicio: "",
-      horaFim: "",
-      tipo: "festa",
-      status: "pendente",
-      observacoes: "",
-      valor: 0,
-      pacoteId: "",
-      convidados: undefined,
-      decoracao: "",
-      equipeId: "",
-      equipeProfissionais: [],
-      adicionaisIds: [],
-      valorEntrada: undefined,
-      formaPagamento: "",
-      aniversariantes: [],
-    });
-    setEventoEquipeProfissionais([]);
-    setAdicionaisObservacoesMap({});
-    setAdicionaisQuantidadeMap({});
-    setValorEditadoManualmente(false);
+      // limpar formulário e fechar
+      setTipoServico('');
+      setDataAgendamento('');
+      setHorario('');
+      setValor(null);
+      setDataVencimento('');
+      setValorEntrada(null);
+      setFormaPagamento('');
+      setObservacoesServico('');
+      setSelectedClientId(null);
+      setSelectedClientDetails(null);
+      setPiscinasList([]);
+      setSelectedPiscinaId(null);
+      setShowForm(false);
+
+    } catch (err) {
+      console.error('[Eventos] Erro ao criar serviço+cobrança+pagamento:', err);
+      toast({ title: 'Erro ao agendar serviço', description: String(err), variant: 'destructive' });
+    }
   };
 
   const handleEditEvento = (id: string) => {
@@ -661,7 +649,7 @@ export default function Eventos() {
                         <SelectValue placeholder="Selecione o cliente" />
                       </SelectTrigger>
                       <SelectContent>
-                        {clientes.map((cliente) => (
+                        {clientesList.map((cliente) => (
                           <SelectItem key={cliente.id} value={cliente.id}>
                             {cliente.nome} {cliente.sobrenome}
                           </SelectItem>
@@ -670,6 +658,35 @@ export default function Eventos() {
                     </Select>
                   </div>
                 </div>
+
+                {/* mostrar detalhes do cliente selecionado e piscinas */}
+                {selectedClientDetails && (
+                  <div className="p-4 bg-slate-50 rounded border">
+                    <div className="text-sm mb-2 font-medium">Cliente selecionado</div>
+                    <div className="text-sm">{selectedClientDetails.nome} {selectedClientDetails.sobrenome}</div>
+                    <div className="text-sm">{selectedClientDetails.email}</div>
+                    <div className="text-sm">{selectedClientDetails.numero_celular}</div>
+                    <div className="mt-3">
+                      <Label htmlFor="piscinaSelect">Piscina</Label>
+                      {piscinasList.length === 0 ? (
+                        <div className="text-xs text-muted-foreground">Nenhuma piscina cadastrada para este cliente.</div>
+                      ) : piscinasList.length === 1 ? (
+                        <div className="text-sm">{piscinasList[0].tipo} — {piscinasList[0].tamanho}</div>
+                      ) : (
+                        <Select value={selectedPiscinaId || ""} onValueChange={(v) => setSelectedPiscinaId(v || null)}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a piscina" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {piscinasList.map(p => (
+                              <SelectItem key={p.id} value={p.id}>{p.tipo} — {p.tamanho}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
