@@ -461,7 +461,7 @@ export async function createServicoComCobrancaEPagamento(payload: {
     const servPayload: any = {
       user_id: userId,
       client_id: payload.clienteId,
-      cliente_id: payload.clienteId, // compatibiliza possíveis nomes
+      client_id: payload.clienteId, // compatibiliza possíveis nomes
       piscina_id: payload.piscinaId,
       tipo_servico: payload.tipo_servico ?? null,
       data_agendamento: payload.data_agendamento ?? null,
@@ -525,6 +525,68 @@ export async function createServicoComCobrancaEPagamento(payload: {
   } catch (err) {
     console.error('[createServicoComCobrancaEPagamento] Exception:', err);
     throw err;
+  }
+}
+
+// --- Serviços (calendar integration) ---
+
+export async function getServicosApi() {
+  try {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabase
+      .from('servicos')
+      .select('id, user_id, client_id, cliente_id, piscina_id, tipo_servico, data_agendamento, horario, status, observacoes, created_at')
+      .eq('user_id', userId)
+      .order('data_agendamento', { ascending: true });
+
+    if (error) {
+      console.error('[getServicosApi] Erro ao buscar servicos:', error);
+      return [];
+    }
+
+    const servicos = data || [];
+    const clienteIds = Array.from(new Set(servicos.map((s:any) => s.client_id || s.cliente_id).filter(Boolean)));
+    const piscinaIds = Array.from(new Set(servicos.map((s:any) => s.piscina_id).filter(Boolean)));
+
+    const clientesMap: Record<string, any> = {};
+    if (clienteIds.length > 0) {
+      const { data: clientesData, error: clientesError } = await supabase
+        .from('clientes')
+        .select('id, nome, sobrenome')
+        .in('id', clienteIds);
+      if (clientesError) console.error('[getServicosApi] Erro ao buscar clientes associados:', clientesError);
+      else (clientesData || []).forEach((c:any) => { clientesMap[c.id] = c; });
+    }
+
+    const piscinasMap: Record<string, any> = {};
+    if (piscinaIds.length > 0) {
+      const { data: piscinasData, error: piscinasError } = await supabase
+        .from('piscinas')
+        .select('id, client_id, tipo, tamanho, endereco')
+        .in('id', piscinaIds);
+      if (piscinasError) console.error('[getServicosApi] Erro ao buscar piscinas associadas:', piscinasError);
+      else (piscinasData || []).forEach((p:any) => { piscinasMap[p.id] = p; });
+    }
+
+    return (servicos as any[]).map(s => ({
+      id: s.id,
+      userId: s.user_id,
+      clienteId: s.client_id || s.cliente_id,
+      clienteNome: clientesMap[s.client_id || s.cliente_id] ? `${clientesMap[s.client_id || s.cliente_id].nome} ${clientesMap[s.client_id || s.cliente_id].sobrenome}` : '',
+      piscinaId: s.piscina_id,
+      piscina: piscinasMap[s.piscina_id] || null,
+      tipoServico: s.tipo_servico,
+      data: s.data_agendamento || null,
+      horario: s.horario || null,
+      status: s.status || 'pendente',
+      observacoes: s.observacoes || null,
+      createdAt: s.created_at,
+    }));
+  } catch (err) {
+    console.error('[getServicosApi] Exception:', err);
+    return [];
   }
 }
 

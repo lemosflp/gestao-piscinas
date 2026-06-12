@@ -54,30 +54,55 @@ type EventoCalendario = Evento & {
 
 export default function Calendario() {
   const navigate = useNavigate();
-  const { Eventos } = useAppContext(); // <<< AQUI: usa os mesmos Eventos do contexto
+  const [servicos, setServicos] = useState<any[]>([]);
   const [currentDate, setCurrentDate] = useState(() => normalizeDate(new Date()));
 
-  // Normaliza Eventos do contexto
-  const EventosProcessados = useMemo<EventoCalendario[]>(() => {
-    const result = Eventos.map((evento, idx) => {
-      // no Evento, `data` é string ISO do input type="date"
-      const dataBase = parseDataEvento(String(evento.data));
+  // carregar servicos para o calendário
+  useState(() => {}); // placeholder to satisfy hooks ordering
 
-      const { h, m } = parseHoraEvento(evento.horaInicio);
+  const EventosProcessados = useMemo<EventoCalendario[]>(() => {
+    const result = servicos.map((evento: any, idx) => {
+      // data field is data (YYYY-MM-DD)
+      const dataBase = parseDataEvento(String(evento.data || evento.data_agendamento || ""));
+      const horaStr = evento.horario || evento.hora || evento.horaInicio || "";
+      const { h, m } = parseHoraEvento(horaStr as string);
       const dataHoraInicio = new Date(dataBase);
       dataHoraInicio.setHours(h || 0, m || 0, 0, 0);
 
       return {
-        ...evento,
-        id: evento.id ?? `ev-${idx}`,
+        id: evento.id ?? `svc-${idx}`,
+        titulo: evento.tipoServico ? `Serviço: ${evento.tipoServico}` : `Serviço - ${evento.clienteNome}`,
+        clienteId: evento.clienteId,
+        clienteNome: evento.clienteNome || "",
+        data: evento.data || evento.data_agendamento || "",
+        horaInicio: horaStr || "",
+        tipo: evento.tipoServico || "servico",
+        status: evento.status || "pendente",
+        observacoes: evento.observacoes || "",
+        valor: 0,
+        userId: evento.userId || "",
         dataDate: dataBase,
         dataHoraInicio,
-      };
+      } as EventoCalendario;
     });
 
-    console.log("EventosProcessados (Calendario, contexto):", result);
     return result;
-  }, [Eventos]);
+  }, [servicos]);
+
+  // carregar servicos via API
+  useMemo(() => {
+    let canceled = false;
+    (async () => {
+      try {
+        const { getServicosApi } = await import("@/services/supabaseApi");
+        const s = await getServicosApi();
+        if (!canceled) setServicos(s);
+      } catch (err) {
+        console.error('[Calendario] Erro ao carregar servicos:', err);
+      }
+    })();
+    return () => { canceled = true; };
+  }, []);
 
   // Semana atual
   const weekStart = startOfWeek(currentDate, { weekStartsOn: 0 }); // domingo
