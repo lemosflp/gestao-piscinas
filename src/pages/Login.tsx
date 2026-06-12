@@ -42,23 +42,23 @@ export default function Login() {
       <div className="hidden lg:flex lg:w-1/2 bg-blue-600 text-white">
         <div className="flex flex-col justify-between px-10 py-10 w-full">
           <header className="text-sm text-blue-100/90">
-            MeuSalão • Painel de gestão
+          AquaHub • Painel de gestã<object data="" type=""></object>
           </header>
 
           <main className="space-y-4 max-w-md">
             <h1 className="text-3xl font-semibold leading-tight">
-              Controle do seu salão
+              Gestão e agenda
               <br />
               em um só lugar.
             </h1>
             <p className="text-sm text-blue-100/90 leading-relaxed">
-              Acompanhe Eventos, clientes e propostas de forma simples,
+              Acompanhe Serviços, clientes e financeiro de forma simples,
               sem planilhas espalhadas.
             </p>
           </main>
 
           <footer className="text-[11px] text-blue-100/80">
-            © {new Date().getFullYear()} MeuSalão
+            © {new Date().getFullYear()} AquaHub
           </footer>
         </div>
       </div>
@@ -70,12 +70,12 @@ export default function Login() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <div className="h-9 w-9 rounded-lg bg-blue-600 flex items-center justify-center text-white font-semibold text-sm">
-                MS
+                AH
               </div>
               <span className="text-xs text-slate-500">Painel de gestão</span>
             </div>
             <h1 className="text-4xl font-bold tracking-tight text-slate-900">
-              MeuSalão
+              AquaHub
             </h1>
             <p className="text-sm text-slate-500">
               Faça login para acessar o painel administrativo.

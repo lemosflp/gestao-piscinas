@@ -286,7 +286,7 @@ END:VEVENT
       <div className="mb-6 md:mb-8">
         <h1 className="text-2xl md:text-4xl font-bold text-foreground">Calendário</h1>
         <p className="text-sm md:text-base text-muted-foreground mt-2">
-          Visualize os Eventos cadastrados na semana
+          Visualize os Serviços agendados na semana
         </p>
       </div>
 
@@ -296,7 +296,7 @@ END:VEVENT
           onClick={() => navigate(`/Eventos?showForm=true`)}
         >
           <Plus size={16} className="md:w-5 md:h-5" />
-          <span className="hidden sm:inline">Cadastrar Evento</span>
+          <span className="hidden sm:inline">Agendar Serviço</span>
           <span className="sm:hidden">Novo</span>
         </Button>
       </div>
@@ -335,7 +335,7 @@ END:VEVENT
                   >
                     Hoje
                   </Button>
-                  <Button
+                  {/* <Button
                     variant="outline"
                     size="sm"
                     className="border-blue-300 text-blue-700 hover:bg-blue-50 ml-2"
@@ -343,8 +343,8 @@ END:VEVENT
                     title="Integrar com Google Calendar"
                   >
                     <Share2 size={16} />
-                  </Button>
-                  <Button
+                  </Button> */}
+                  {/* <Button
                     variant="outline"
                     size="sm"
                     className="border-blue-300 text-blue-700 hover:bg-blue-50 ml-2"
@@ -352,7 +352,7 @@ END:VEVENT
                     title="Exportar calendário como ICS"
                   >
                     <Download size={16} />
-                  </Button>
+                  </Button> */}
                 </div>
               </div>
             </CardHeader>
@@ -436,7 +436,7 @@ END:VEVENT
               <div className="space-y-4 mt-8 pt-6 border-t-2 border-slate-200">
                 <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
                   <Calendar size={18} className="text-blue-600" />
-                  Eventos desta semana
+                  Serviços desta semana
                 </h3>
                 <div className="space-y-2">
                   {EventosProcessados
@@ -586,7 +586,7 @@ END:VEVENT
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <span className="text-slate-700">Com Eventos</span>
+                  <span className="text-slate-700">Com Serviços</span>
                 </div>
               </div>
             </CardContent>

@@ -33,7 +33,7 @@ export const Layout = ({ children }: LayoutProps) => {
         <div className="px-6 py-5 border-b border-blue-500 flex items-center gap-3">
           {/* coloque sua logo aqui se tiver */}
           <div className="flex flex-col">
-            <span className="text-lg font-semibold tracking-tight">Gestão Piscinas</span>
+            <span className="text-lg font-semibold tracking-tight">AquaHub</span>
             <span className="text-xs text-blue-200">Painel de gestão</span>
           </div>
         </div>
@@ -231,7 +231,7 @@ export const Layout = ({ children }: LayoutProps) => {
                 <span>Serviços</span>
               </NavLink>
 
-              <NavLink
+              {/* <NavLink
                 to="/propostas"
                 onClick={closeMobileMenu}
                 className={({ isActive }) =>
@@ -244,7 +244,7 @@ export const Layout = ({ children }: LayoutProps) => {
               >
                 <Package size={16} />
                 <span>Propostas</span>
-              </NavLink>
+              </NavLink> */}
 
               <NavLink
                 to="/clientes"
@@ -261,7 +261,7 @@ export const Layout = ({ children }: LayoutProps) => {
                 <span>Clientes</span>
               </NavLink>
 
-              <NavLink
+              {/* <NavLink
                 to="/relatorios"
                 onClick={closeMobileMenu}
                 className={({ isActive }) =>
@@ -274,7 +274,7 @@ export const Layout = ({ children }: LayoutProps) => {
               >
                 <FileText size={16} />
                 <span>Relatórios</span>
-              </NavLink>
+              </NavLink> */}
             </nav>
 
             <div className="border-t border-blue-600 px-3 py-3 text-sm space-y-1">

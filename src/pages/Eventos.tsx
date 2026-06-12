@@ -170,9 +170,15 @@ export default function Eventos() {
   useEffect(() => {
     async function fetchClientes() {
       setLoadingClientes(true);
+      // garantir user_id em todas as queries (RLS)
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) console.error('[Eventos] fetchClientes auth error:', authError);
+      const userId = authData?.user?.id ?? null;
+
       const { data, error } = await supabase
         .from("clientes")
         .select("id, nome, sobrenome, numero_celular, email")
+        .eq('user_id', userId)
         .order("nome");
       if (error) {
         toast({ title: "Erro ao carregar clientes", description: error.message, variant: "destructive" });
@@ -192,6 +198,11 @@ export default function Eventos() {
   }, []);
 
   async function fetchServicos() {
+    // incluir user_id nas consultas para respeitar RLS
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error('[Eventos] fetchServicos auth error:', authErr);
+    const userId = authData?.user?.id ?? null;
+
     const { data, error } = await supabase
       .from("servicos")
       .select(`
@@ -200,6 +211,7 @@ export default function Eventos() {
         clientes(nome, sobrenome),
         piscinas(tamanho)
       `)
+      .eq('user_id', userId)
       .order("data_agendamento", { ascending: false });
 
     if (error) {
@@ -220,11 +232,16 @@ export default function Eventos() {
   // ---------------------------------------------------------------------------
   async function fetchCobrancaDoServico(servicoId: string) {
     setSelectedCobranca(null);
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error('[Eventos] fetchCobrancaDoServico auth error:', authErr);
+    const userId = authData?.user?.id ?? null;
+
     const { data } = await supabase
       .from("cobrancas")
       .select("id, servico_id, valor, data_vencimento, status")
       .eq("servico_id", servicoId)
-      .single();
+      .eq('user_id', userId)
+      .maybeSingle();
     setSelectedCobranca(data ?? null);
   }
 
@@ -235,11 +252,16 @@ export default function Eventos() {
     setPagamentoModal({ servicoId, clienteNome, cobranca: null, pagamentos: [], loading: true });
     setNovoPagamentoForm(PAGAMENTO_FORM_INITIAL);
 
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error('[Eventos] abrirPagamentos auth error:', authErr);
+    const userId = authData?.user?.id ?? null;
+
     const { data: cobrancaData, error: cobrancaError } = await supabase
       .from("cobrancas")
       .select("id, servico_id, valor, data_vencimento, status")
       .eq("servico_id", servicoId)
-      .single();
+      .eq('user_id', userId)
+      .maybeSingle();
 
     if (cobrancaError || !cobrancaData) {
       toast({ title: "Cobrança não encontrada para este serviço.", variant: "destructive" });
@@ -251,6 +273,7 @@ export default function Eventos() {
       .from("pagamentos")
       .select("id, cobranca_id, data_pagamento, valor_pago, forma_pagamento, observacoes, created_at")
       .eq("cobranca_id", cobrancaData.id)
+      .eq('user_id', userId)
       .order("created_at", { ascending: true });
 
     setPagamentoModal({
@@ -317,7 +340,8 @@ export default function Eventos() {
     await supabase
       .from("cobrancas")
       .update({ status: novoStatus })
-      .eq("id", pagamentoModal.cobranca.id);
+      .eq("id", pagamentoModal.cobranca.id)
+      .eq('user_id', user?.id);
 
     toast({ title: "Pagamento registrado com sucesso!" });
     setNovoPagamentoForm(PAGAMENTO_FORM_INITIAL);
@@ -333,7 +357,11 @@ export default function Eventos() {
   async function handleRemoverPagamento(pagamentoId: string) {
     if (!pagamentoModal?.cobranca) return;
 
-    const { error } = await supabase.from("pagamentos").delete().eq("id", pagamentoId);
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error('[Eventos] handleRemoverPagamento auth error:', authErr);
+    const userId = authData?.user?.id ?? null;
+
+    const { error } = await supabase.from("pagamentos").delete().eq("id", pagamentoId).eq('user_id', userId);
     if (error) {
       toast({ title: "Erro ao remover pagamento", description: error.message, variant: "destructive" });
       return;
@@ -352,7 +380,8 @@ export default function Eventos() {
     await supabase
       .from("cobrancas")
       .update({ status: novoStatus })
-      .eq("id", pagamentoModal.cobranca.id);
+      .eq("id", pagamentoModal.cobranca.id)
+      .eq('user_id', userId);
 
     toast({ title: "Pagamento removido." });
     await abrirPagamentos(pagamentoModal.servicoId, pagamentoModal.clienteNome);
@@ -367,10 +396,15 @@ export default function Eventos() {
     if (!clienteId) return;
 
     setLoadingPiscinas(true);
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error('[Eventos] handleClienteSelect auth error:', authErr);
+    const userId = authData?.user?.id ?? null;
+
     const { data, error } = await supabase
       .from("piscinas")
       .select("id, client_id, tipo, tamanho, endereco, observacoes")
-      .eq("client_id", clienteId);
+      .eq("client_id", clienteId)
+      .eq('user_id', userId);
 
     if (error) {
       toast({ title: "Erro ao carregar piscinas", description: error.message, variant: "destructive" });
@@ -422,7 +456,8 @@ export default function Eventos() {
             status: formData.status,
             observacoes: formData.observacoes || null,
           })
-          .eq("id", editingServicoId);
+          .eq("id", editingServicoId)
+          .eq('user_id', user.id);
         if (error) throw error;
         toast({ title: "Serviço atualizado com sucesso!" });
         await fetchServicos();
@@ -475,9 +510,9 @@ export default function Eventos() {
 
           // Atualiza status da cobrança se entrada cobre tudo
           if (formData.valorEntrada >= (formData.valor ?? 0)) {
-            await supabase.from("cobrancas").update({ status: "pago" }).eq("id", cobrancaData.id);
+            await supabase.from("cobrancas").update({ status: "pago" }).eq("id", cobrancaData.id).eq('user_id', user.id);
           } else {
-            await supabase.from("cobrancas").update({ status: "parcial" }).eq("id", cobrancaData.id);
+            await supabase.from("cobrancas").update({ status: "parcial" }).eq("id", cobrancaData.id).eq('user_id', user.id);
           }
         }
 
@@ -508,10 +543,15 @@ export default function Eventos() {
     if (!s) return;
 
     setLoadingPiscinas(true);
+    const { data: authData, error: authErr } = await supabase.auth.getUser();
+    if (authErr) console.error('[Eventos] handleEditServico auth error:', authErr);
+    const userId = authData?.user?.id ?? null;
+
     const { data } = await supabase
       .from("piscinas")
       .select("id, client_id, tipo, tamanho, endereco, observacoes")
-      .eq("client_id", s.client_id);
+      .eq("client_id", s.client_id)
+      .eq('user_id', userId);
     setPiscinas(data ?? []);
     setLoadingPiscinas(false);
 
@@ -1118,7 +1158,10 @@ export default function Eventos() {
                             className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 whitespace-nowrap"
                             onClick={async e => {
                               e.stopPropagation();
-                              await supabase.from("servicos").update({ status: "confirmado" }).eq("id", servico.id);
+                              const { data: authData, error: authErr } = await supabase.auth.getUser();
+                              if (authErr) console.error('[Eventos] confirmar servico auth error:', authErr);
+                              const userId = authData?.user?.id ?? null;
+                              await supabase.from("servicos").update({ status: "confirmado" }).eq("id", servico.id).eq('user_id', userId);
                               fetchServicos();
                             }}
                           >
@@ -1250,7 +1293,10 @@ export default function Eventos() {
                       type="button"
                       className="bg-green-600 hover:bg-green-700 text-white"
                       onClick={async () => {
-                        await supabase.from("servicos").update({ status: "confirmado" }).eq("id", selectedServico.id);
+                        const { data: authData, error: authErr } = await supabase.auth.getUser();
+                        if (authErr) console.error('[Eventos] confirmar selectedServico auth error:', authErr);
+                        const userId = authData?.user?.id ?? null;
+                        await supabase.from("servicos").update({ status: "confirmado" }).eq("id", selectedServico.id).eq('user_id', userId);
                         await fetchServicos();
                         setSelectedServicoId(null);
                       }}
@@ -1263,7 +1309,10 @@ export default function Eventos() {
                     type="button"
                     className="bg-red-600 hover:bg-red-700 text-white"
                     onClick={async () => {
-                      await supabase.from("servicos").delete().eq("id", selectedServico.id);
+                      const { data: authData, error: authErr } = await supabase.auth.getUser();
+                      if (authErr) console.error('[Eventos] remover selectedServico auth error:', authErr);
+                      const userId = authData?.user?.id ?? null;
+                      await supabase.from("servicos").delete().eq("id", selectedServico.id).eq('user_id', userId);
                       await fetchServicos();
                       setSelectedServicoId(null);
                     }}
