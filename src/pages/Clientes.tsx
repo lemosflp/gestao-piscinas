@@ -11,6 +11,7 @@ import { Cliente } from "@/types";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { getClientesApi } from "@/services/supabaseApi";
 
 export default function Clientes() {
   const { clientes, addCliente, updateCliente, refreshClientes } = useAppContext() as any;
@@ -177,20 +178,39 @@ export default function Clientes() {
       const atualizado = await updateCliente(editingClienteId, payload as any);
       if (atualizado) {
         toast({ title: "Cadastro atualizado com sucesso" });
+      // garantir que piscina esteja carregada: recarregar clientes e buscar cliente atualizado
+      try {
+        await refreshClientes();
+        const all = await getClientesApi();
+        const refreshed = all.find((c) => c.id === editingClienteId) || atualizado;
+        setSelectedCliente(refreshed);
+        setViewMode('view');
+      } catch (e) {
+        console.error("Erro ao recuperar cliente atualizado:", e);
         setSelectedCliente(atualizado);
         setViewMode('view');
-      } else {
-        toast({ title: "Erro ao atualizar cliente", variant: "destructive" });
       }
     } else {
-      const novo = await addCliente(payload as any);
-      if (novo) {
-        toast({ title: "Cliente cadastrado com sucesso" });
+      toast({ title: "Erro ao atualizar cliente", variant: "destructive" });
+    }
+    } else {
+    const novo = await addCliente(payload as any);
+    if (novo) {
+      toast({ title: "Cliente cadastrado com sucesso" });
+      try {
+        await refreshClientes();
+        const all = await getClientesApi();
+        const refreshed = all.find((c) => c.id === novo.id) || novo;
+        setSelectedCliente(refreshed);
+        setViewMode('view');
+      } catch (e) {
+        console.error("Erro ao recuperar cliente criado:", e);
         setSelectedCliente(novo);
         setViewMode('view');
-      } else {
-        toast({ title: "Erro ao cadastrar cliente", variant: "destructive" });
       }
+    } else {
+      toast({ title: "Erro ao cadastrar cliente", variant: "destructive" });
+    }
     }
 
     // reset e navegação de tela
