@@ -14,8 +14,9 @@ import { useAuth } from "@/contexts/AuthContext";
 type AppContextValue = {
   clientes: Cliente[];
   Eventos: Evento[];
-  addCliente: (data: Omit<Cliente, "id" | "userId" | "createdAt">) => Promise<void>;
-  updateCliente: (id: string, patch: Partial<Cliente>) => Promise<void>;
+  addCliente: (data: Omit<Cliente, "id" | "userId" | "createdAt">) => Promise<Cliente | null>;
+  updateCliente: (id: string, patch: Partial<Cliente>) => Promise<Cliente | null>;
+  refreshClientes: () => Promise<void>;
   addEvento: (data: Omit<Evento, "id" | "userId">) => Promise<void>;
   updateEvento: (id: string, patch: Partial<Evento>) => Promise<void>;
   removeEvento: (id: string) => Promise<void>;
@@ -64,16 +65,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     load();
   }, [user]);
 
+  // função pública para atualizar apenas a lista de clientes
+  const refreshClientes = async () => {
+    try {
+      const clientesDb = await getClientesApi();
+      setClientes(clientesDb);
+      console.log("[AppContext] refreshClientes: clientes recarregados", clientesDb.length);
+    } catch (err) {
+      console.error("[AppContext] Erro ao recarregar clientes:", err);
+    }
+  };
+
   const addCliente = async (data: Omit<Cliente, "id" | "userId" | "createdAt">) => {
     const novo = await createClienteApi(data);
-    if (!novo) return;
+    if (!novo) return null;
     setClientes((prev) => [...prev, novo]);
+    return novo;
   };
 
   const updateCliente = async (id: string, patch: Partial<Cliente>) => {
     const atualizado = await updateClienteApi(id, patch);
-    if (!atualizado) return;
+    if (!atualizado) return null;
     setClientes((prev) => prev.map((c) => (c.id === id ? atualizado : c)));
+    return atualizado;
   };
 
   const addEvento = async (data: Omit<Evento, "id" | "userId">) => {
@@ -111,6 +125,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         Eventos,
         addCliente,
         updateCliente,
+        refreshClientes,
         addEvento,
         updateEvento,
         removeEvento,

@@ -36,7 +36,9 @@ export async function getClientesApi(): Promise<Cliente[]> {
 
     const { data, error } = await supabase
       .from("clientes")
-      .select("*")
+      .select(
+        `id, user_id, nome, sobrenome, numero_celular, numero_telefone, email, cidade, endereco, observacoes, created_at`
+      )
       .eq("user_id", userId)
       .order("created_at", { ascending: false });
 
@@ -45,25 +47,78 @@ export async function getClientesApi(): Promise<Cliente[]> {
       return [];
     }
 
-    // mapeia snake_case -> camelCase
+    // buscar piscinas associadas a esses clientes e mapear por client_id
+    const clienteIds = (data || []).map((c: any) => c.id).filter(Boolean);
+    const piscinasByCliente: Record<string, any> = {};
+    if (clienteIds.length > 0) {
+      try {
+        // garantir que IDs sejam strings simples
+        const sanitizedIds = clienteIds.map((id: any) => String(id));
+        // validar formato UUID para evitar queries inválidas
+        const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+        const validIds = sanitizedIds.filter((id: string) => uuidRegex.test(id));
+        if (validIds.length !== sanitizedIds.length) {
+          console.warn("[getClientesApi] Alguns clienteIds foram filtrados por não parecerem UUIDs", { sanitizedIds, validIds });
+        }
+
+        if (validIds.length === 0) {
+          console.warn("[getClientesApi] Nenhum clienteId válido para buscar piscinas. Pulando query de piscinas.");
+        } else {
+          // chunking para evitar possíveis limites de URL/array
+          const chunkSize = 50;
+          for (let i = 0; i < validIds.length; i += chunkSize) {
+            const chunk = validIds.slice(i, i + chunkSize);
+            const { data: piscinasData, error: piscinasError, status } = await supabase
+              .from("piscinas")
+              .select("id, client_id, tipo, tamanho, endereco, observacoes, created_at")
+              .in("client_id", chunk as any[]);
+
+            if (piscinasError) {
+              console.error("[getClientesApi] Erro ao buscar piscinas (chunk):", piscinasError, "status:", status, "chunkSize:", chunk.length, "chunkSample:", chunk.slice(0,3));
+              // continuar para próximos chunks
+              continue;
+            }
+
+            if (piscinasData) {
+              (piscinasData || []).forEach((p: any) => {
+                piscinasByCliente[p.client_id] = p;
+              });
+            }
+          }
+        }
+      } catch (fetchErr) {
+        console.error("Exception ao buscar piscinas:", fetchErr);
+      }
+    }
+
+    // mapeia snake_case -> camelCase (ajustado para novo schema) e inclui piscina quando disponível
     return (
-      data?.map((c: any) => ({
-        id: c.id,
-        userId: c.user_id,
-        nome: c.nome,
-        sobrenome: c.sobrenome,
-        cpf: c.cpf,
-        sexo: c.sexo,
-        dataNascimento: c.data_nascimento,
-        numeroCelular: c.numero_celular,
-        numeroTelefone: c.numero_telefone ?? undefined,
-        email: c.email,
-        estado: c.estado,
-        cidade: c.cidade,
-        endereco: c.endereco,
-        complemento: c.complemento ?? undefined,
-        createdAt: c.created_at,
-      })) || []
+      data?.map((c: any) => {
+        const p = piscinasByCliente[c.id];
+        return {
+          id: c.id,
+          userId: c.user_id,
+          nome: c.nome,
+          sobrenome: c.sobrenome,
+          numeroCelular: c.numero_celular,
+          numeroTelefone: c.numero_telefone ?? undefined,
+          email: c.email,
+          cidade: c.cidade,
+          endereco: c.endereco,
+          observacoes: c.observacoes ?? undefined,
+          createdAt: c.created_at,
+          piscina: p
+            ? {
+                id: p.id,
+                tipo: p.tipo,
+                tamanho: p.tamanho,
+                endereco: p.endereco,
+                observacoes: p.observacoes,
+                createdAt: p.created_at,
+              }
+            : null,
+        };
+      }) || []
     );
   } catch (err) {
     console.error("getClientesApi - erro de autenticação:", err);
@@ -72,30 +127,26 @@ export async function getClientesApi(): Promise<Cliente[]> {
 }
 
 export async function createClienteApi(
-  cliente: Omit<Cliente, "id" | "userId" | "createdAt">
+  cliente: any
 ): Promise<Cliente | null> {
   try {
     const userId = await getCurrentUserId();
     if (!userId) {
-      console.warn("[supabaseApi] createClienteApi chamado sem user autenticado");
+      console.warn("[supabaseApi] createClienteApi chamado sem user autenticado — faça login antes de criar clientes");
       return null;
     }
 
-    // mapeia para nomes exatos do schema
-    const payload = {
+    // mapeia para nomes exatos do novo schema
+    const payload: any = {
       user_id: userId,
       nome: cliente.nome,
-      sobrenome: cliente.sobrenome,
-      cpf: cliente.cpf,
-      sexo: cliente.sexo,
-      data_nascimento: cliente.dataNascimento,
-      numero_celular: cliente.numeroCelular,
+      sobrenome: cliente.sobrenome ?? "",
+      numero_celular: cliente.telefone ?? cliente.numeroCelular ?? null,
       numero_telefone: cliente.numeroTelefone ?? null,
       email: cliente.email,
-      estado: cliente.estado,
-      cidade: cliente.cidade,
-      endereco: cliente.endereco,
-      complemento: cliente.complemento ?? null,
+      cidade: cliente.cidade ?? "",
+      endereco: cliente.endereco ?? "",
+      observacoes: cliente.observacoes ?? null,
     };
 
     const { data, error } = await supabase
@@ -109,24 +160,79 @@ export async function createClienteApi(
       return null;
     }
 
-    // converte de volta para o tipo Cliente da app
+    // depois de criar cliente, criar piscina se fornecida
     const c = data as any;
+    try {
+      if (cliente.piscina && cliente.piscina.tamanho) {
+        let poolPayload: any = {
+          client_id: c.id,
+          user_id: userId,
+          tipo: cliente.piscina.tipo ?? null,
+          tamanho: cliente.piscina.tamanho,
+          endereco: cliente.piscina.endereco ?? null,
+          observacoes: cliente.piscina.observacoes ?? null,
+        };
+
+        // tentativa padrão: com user_id
+        const { data: poolData, error: poolError } = await supabase.from("piscinas").insert(poolPayload).select().single().maybeSingle();
+        if (poolError) {
+          const errStr = JSON.stringify(poolError);
+          console.error("Erro ao criar piscina (tentativa com user_id):", poolError);
+
+          // se a causa aparenta ser coluna user_id ausente, tenta novamente sem user_id
+          if (errStr.includes("user_id") || (poolError.message && poolError.message.includes("user_id")) || (poolError.details && String(poolError.details).includes("user_id"))) {
+            console.warn("[createClienteApi] Servidor rejeitou coluna user_id — reenviando payload sem user_id");
+            delete poolPayload.user_id;
+            const { data: poolData2, error: poolError2 } = await supabase.from("piscinas").insert(poolPayload).select().single().maybeSingle();
+            if (poolError2) {
+              console.error("Erro ao criar piscina (tentativa sem user_id):", poolError2);
+            }
+          }
+        }
+      }
+    } catch (pErr) {
+      console.error("Erro no fluxo de criação de piscina:", pErr);
+    }
+
+    // buscar piscina criada (se houver) para incluir no retorno
+    let createdPiscina = null;
+    try {
+      const { data: poolRow, error: poolRowError } = await supabase
+        .from("piscinas")
+        .select("id, client_id, tipo, tamanho, endereco, observacoes, created_at")
+        .eq("client_id", c.id)
+        .limit(1)
+        .maybeSingle();
+      if (poolRowError) {
+        console.error("Erro ao buscar piscina criada:", poolRowError);
+      } else if (poolRow) {
+        createdPiscina = {
+          id: poolRow.id,
+          tipo: poolRow.tipo,
+          tamanho: poolRow.tamanho,
+          endereco: poolRow.endereco,
+          observacoes: poolRow.observacoes,
+          createdAt: poolRow.created_at,
+        };
+      }
+    } catch (pErr) {
+      console.error("Exception ao buscar piscina criada:", pErr);
+    }
+
+    // converte de volta para o tipo Cliente da app (preenchendo campos esperados)
     return {
       id: c.id,
       userId: c.user_id,
       nome: c.nome,
       sobrenome: c.sobrenome,
-      cpf: c.cpf,
-      sexo: c.sexo,
-      dataNascimento: c.data_nascimento,
       numeroCelular: c.numero_celular,
       numeroTelefone: c.numero_telefone ?? undefined,
       email: c.email,
-      estado: c.estado,
       cidade: c.cidade,
       endereco: c.endereco,
-      complemento: c.complemento ?? undefined,
+      observacoes: c.observacoes ?? undefined,
       createdAt: c.created_at,
+      piscina: createdPiscina,
     } as Cliente;
   } catch (err) {
     console.error("createClienteApi - erro de autenticação:", err);
@@ -145,20 +251,17 @@ export async function updateClienteApi(
       return null;
     }
 
-    // monta patch só com campos presentes, já com nomes do schema
+    // monta patch só com campos presentes, já com nomes do novo schema
     const dbPatch: any = {};
     if (patch.nome !== undefined) dbPatch.nome = patch.nome;
     if (patch.sobrenome !== undefined) dbPatch.sobrenome = patch.sobrenome;
-    if (patch.cpf !== undefined) dbPatch.cpf = patch.cpf;
-    if (patch.sexo !== undefined) dbPatch.sexo = patch.sexo;
-    if (patch.dataNascimento !== undefined) dbPatch.data_nascimento = patch.dataNascimento;
+    if ((patch as any).telefone !== undefined) dbPatch.numero_celular = (patch as any).telefone;
     if (patch.numeroCelular !== undefined) dbPatch.numero_celular = patch.numeroCelular;
     if (patch.numeroTelefone !== undefined) dbPatch.numero_telefone = patch.numeroTelefone ?? null;
     if (patch.email !== undefined) dbPatch.email = patch.email;
-    if (patch.estado !== undefined) dbPatch.estado = patch.estado;
     if (patch.cidade !== undefined) dbPatch.cidade = patch.cidade;
     if (patch.endereco !== undefined) dbPatch.endereco = patch.endereco;
-    if (patch.complemento !== undefined) dbPatch.complemento = patch.complemento ?? null;
+    if ((patch as any).observacoes !== undefined) dbPatch.observacoes = (patch as any).observacoes ?? null;
 
     const { data, error } = await supabase
       .from("clientes")
@@ -174,22 +277,100 @@ export async function updateClienteApi(
     }
 
     const c = data as any;
+
+    // Se veio objeto piscina no patch, upsert na tabela piscinas (procura por client_id)
+    try {
+      const piscinaObj = (patch as any).piscina;
+      if (piscinaObj) {
+        // procura piscina existente do cliente
+        const { data: existingPiscina } = await supabase
+          .from("piscinas")
+          .select("*")
+          .eq("client_id", id)
+          .limit(1)
+          .maybeSingle();
+
+        const poolPayload: any = {
+          client_id: id,
+          user_id: userId,
+          tipo: piscinaObj.tipo ?? null,
+          tamanho: piscinaObj.tamanho ?? null,
+          endereco: piscinaObj.endereco ?? null,
+          observacoes: piscinaObj.observacoes ?? null,
+        };
+
+        if (existingPiscina && (existingPiscina as any).id) {
+          // tenta update incluindo user_id, se falhar por causa de coluna ausente, tenta sem
+          let updatePayload = { ...poolPayload };
+          const { error: updateError } = await supabase.from("piscinas").update(updatePayload).eq("id", (existingPiscina as any).id);
+          if (updateError) {
+            const uErrStr = JSON.stringify(updateError);
+            console.error("Erro ao atualizar piscina (tentativa com user_id):", updateError);
+            if (uErrStr.includes("user_id") || (updateError.message && updateError.message.includes("user_id"))) {
+              console.warn("[updateClienteApi] Servidor rejeitou coluna user_id durante update — reenviando sem user_id");
+              delete updatePayload.user_id;
+              const { error: updateError2 } = await supabase.from("piscinas").update(updatePayload).eq("id", (existingPiscina as any).id);
+              if (updateError2) console.error("Erro ao atualizar piscina (tentativa sem user_id):", updateError2);
+            }
+          }
+        } else {
+          // insert
+          let insertPayload: any = { ...poolPayload };
+          const { error: insertError } = await supabase.from("piscinas").insert(insertPayload);
+          if (insertError) {
+            const iErrStr = JSON.stringify(insertError);
+            console.error("Erro ao inserir piscina (tentativa com user_id):", insertError);
+            if (iErrStr.includes("user_id") || (insertError.message && insertError.message.includes("user_id"))) {
+              console.warn("[updateClienteApi] Servidor rejeitou coluna user_id durante insert — reenviando sem user_id");
+              delete insertPayload.user_id;
+              const { error: insertError2 } = await supabase.from("piscinas").insert(insertPayload);
+              if (insertError2) console.error("Erro ao inserir piscina (tentativa sem user_id):", insertError2);
+            }
+          }
+        }
+      }
+    } catch (pErr) {
+      console.error("Erro ao upsert de piscina:", pErr);
+    }
+
+    // buscar piscina atualizada/criada (se houver) para incluir no retorno
+    let updatedPiscina = null;
+    try {
+      const { data: poolRow, error: poolRowError } = await supabase
+        .from("piscinas")
+        .select("id, client_id, tipo, tamanho, endereco, observacoes, created_at")
+        .eq("client_id", c.id)
+        .limit(1)
+        .maybeSingle();
+      if (poolRowError) {
+        console.error("Erro ao buscar piscina atualizada:", poolRowError);
+      } else if (poolRow) {
+        updatedPiscina = {
+          id: poolRow.id,
+          tipo: poolRow.tipo,
+          tamanho: poolRow.tamanho,
+          endereco: poolRow.endereco,
+          observacoes: poolRow.observacoes,
+          createdAt: poolRow.created_at,
+        };
+      }
+    } catch (pErr) {
+      console.error("Exception ao buscar piscina atualizada:", pErr);
+    }
+
     return {
       id: c.id,
       userId: c.user_id,
       nome: c.nome,
       sobrenome: c.sobrenome,
-      cpf: c.cpf,
-      sexo: c.sexo,
-      dataNascimento: c.data_nascimento,
       numeroCelular: c.numero_celular,
       numeroTelefone: c.numero_telefone ?? undefined,
       email: c.email,
-      estado: c.estado,
       cidade: c.cidade,
       endereco: c.endereco,
-      complemento: c.complemento ?? undefined,
+      observacoes: c.observacoes ?? undefined,
       createdAt: c.created_at,
+      piscina: updatedPiscina,
     } as Cliente;
   } catch (err) {
     console.error("updateClienteApi - erro de autenticação:", err);
@@ -256,7 +437,7 @@ export async function getEventosApi(): Promise<Evento[]> {
       id: ev.id,
       userId: ev.user_id,
       titulo: ev.titulo || "",
-      clienteId: ev.cliente_id || "",
+      clienteId: ev.client_id || "",
       clienteNome: ev.cliente_nome || "",
       data: ev.data || "",
       horaInicio: ev.hora_inicio || "",
@@ -299,7 +480,7 @@ export async function createEventoApi(
       .insert({
         user_id: userId,
         titulo: evento.titulo,
-        cliente_id: evento.clienteId,
+        client_id: evento.clienteId,
         cliente_nome: evento.clienteNome,
         data: evento.data,
         hora_inicio: evento.horaInicio,
@@ -429,7 +610,7 @@ export async function updateEventoApi(
     // Preparar patch apenas com campos da tabela Eventos (sem arrays relacionados)
     const dbPatch: any = {};
     if (patch.titulo !== undefined) dbPatch.titulo = patch.titulo;
-    if (patch.clienteId !== undefined) dbPatch.cliente_id = patch.clienteId;
+    if (patch.clienteId !== undefined) dbPatch.client_id = patch.clienteId;
     if (patch.clienteNome !== undefined) dbPatch.cliente_nome = patch.clienteNome;
     if (patch.data !== undefined) dbPatch.data = patch.data;
     if (patch.horaInicio !== undefined) dbPatch.hora_inicio = patch.horaInicio;

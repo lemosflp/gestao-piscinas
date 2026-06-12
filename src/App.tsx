@@ -14,6 +14,7 @@ import Calendario from "./pages/Calendario";
 import Eventos from "./pages/Eventos";
 import Pacotes from "./pages/Pacotes";
 import Clientes from "./pages/Clientes";
+import TestClienteForm from "./pages/TestClienteForm";
 import Relatorios from "./pages/Relatorios";
 import Ajuda from "./pages/Ajuda";
 import NotFound from "./pages/NotFound";
@@ -25,7 +26,7 @@ const queryClient = new QueryClient();
 function PrivateRoutes() {
   const { user, loading } = useAuth();
 
-  /* 
+
 
   if (loading) {
     return (
@@ -38,7 +39,6 @@ function PrivateRoutes() {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  */
 
   return (
     <Layout>
@@ -47,6 +47,7 @@ function PrivateRoutes() {
         <Route path="/calendario" element={<Calendario />} />
         <Route path="/Eventos" element={<Eventos />} />
         {/* <Route path="/propostas" element={<Pacotes />} /> */}
+        <Route path="/test-cliente" element={<TestClienteForm />} />
         <Route path="/clientes" element={<Clientes />} />
         <Route path="/relatorios" element={<Relatorios />} />
         <Route path="/ajuda" element={<Ajuda />} />

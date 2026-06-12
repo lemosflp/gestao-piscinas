@@ -22,7 +22,7 @@ export interface Cliente {
 export interface Evento {
   id: string;              // uuid (public.Eventos.id)
   titulo: string;
-  clienteId: string;       // uuid (public.Eventos.cliente_id)
+  clienteId: string;       // uuid (public.Eventos.client_id)
   clienteNome: string;
   data: string;            // date -> string yyyy-MM-dd
   horaInicio: string;      // time -> string HH:mm

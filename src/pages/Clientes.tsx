@@ -13,24 +13,25 @@ import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Clientes() {
-  const { clientes, addCliente, updateCliente } = useAppContext() as any;
+  const { clientes, addCliente, updateCliente, refreshClientes } = useAppContext() as any;
   const [editingClienteId, setEditingClienteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState<Partial<Cliente>>({
-    nome: "",
-    sobrenome: "",
-    cpf: "",
-    sexo: "F",
-    dataNascimento: "",
-    numeroCelular: "",
-    numeroTelefone: "",
-    email: "",
-    estado: "",
-    cidade: "",
-    endereco: "",
-    complemento: ""
-  });
+  const [formData, setFormData] = useState<any>({
+      nome: "",
+        sobrenome: "",
+        numeroCelular: "",
+        numeroTelefone: "",
+        email: "",
+        endereco: "",
+        cidade: "",
+        observacoes: "",
+        piscinaTipo: "",
+        piscinaTamanho: "",
+        piscinaEndereco: "",
+        piscinaObservacoes: "",
+        piscinaSameAddress: true,
+      });
   const { toast } = useToast();
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'edit'>('list');
@@ -66,19 +67,24 @@ export default function Clientes() {
 
   const handleEditFromView = () => {
     if (!selectedCliente) return;
+    const piscina = (selectedCliente as any).piscina || null;
+    const piscinaEndereco = piscina ? piscina.endereco ?? "" : "";
+    const sameAddress = piscina ? (piscinaEndereco === (selectedCliente as any).endereco || piscinaEndereco === "") : true;
+
     setFormData({
-      nome: selectedCliente.nome,
-      sobrenome: selectedCliente.sobrenome,
-      cpf: selectedCliente.cpf,
-      sexo: selectedCliente.sexo,
-      dataNascimento: selectedCliente.dataNascimento,
-      numeroCelular: selectedCliente.numeroCelular,
-      numeroTelefone: selectedCliente.numeroTelefone,
-      email: selectedCliente.email,
-      estado: selectedCliente.estado,
-      cidade: selectedCliente.cidade,
-      endereco: selectedCliente.endereco,
-      complemento: selectedCliente.complemento,
+      nome: selectedCliente.nome || "",
+      sobrenome: selectedCliente.sobrenome || "",
+      numeroCelular: (selectedCliente as any).numero_celular || (selectedCliente as any).numeroCelular || (selectedCliente as any).numero_telefone || (selectedCliente as any).numeroTelefone || (selectedCliente as any).telefone || "",
+      numeroTelefone: (selectedCliente as any).numero_telefone || (selectedCliente as any).numeroTelefone || "",
+      email: selectedCliente.email || "",
+      endereco: selectedCliente.endereco || "",
+      cidade: selectedCliente.cidade || "",
+      observacoes: (selectedCliente as any).observacoes || "",
+      piscinaTipo: piscina ? piscina.tipo ?? "" : "",
+      piscinaTamanho: piscina ? piscina.tamanho ?? "" : "",
+      piscinaEndereco: sameAddress ? selectedCliente.endereco || "" : piscinaEndereco,
+      piscinaObservacoes: piscina ? piscina.observacoes ?? "" : "",
+      piscinaSameAddress: sameAddress,
     });
     setEditingClienteId(selectedCliente.id as string);
     setShowForm(true);
@@ -89,16 +95,17 @@ export default function Clientes() {
     setFormData({
       nome: "",
       sobrenome: "",
-      cpf: "",
-      sexo: "F",
-      dataNascimento: "",
       numeroCelular: "",
       numeroTelefone: "",
       email: "",
-      estado: "",
-      cidade: "",
       endereco: "",
-      complemento: ""
+      cidade: "",
+      observacoes: "",
+      piscinaTipo: "",
+      piscinaTamanho: "",
+      piscinaEndereco: "",
+      piscinaObservacoes: "",
+      piscinaSameAddress: true,
     });
   };
 
@@ -120,81 +127,87 @@ export default function Clientes() {
   };
 
   const filteredClientes = clientes.filter(cliente =>
-    cliente.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.sobrenome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (cliente.nome ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ((cliente as any).sobrenome ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    ((cliente as any).email ?? "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const handleInputChange = (field: keyof Cliente, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: string, value: any) => {
+    setFormData((prev: any) => ({ ...prev, [field]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-  
-    if (!formData.nome || !formData.sobrenome || !formData.cpf || !formData.email) {
+
+    if (!formData.nome || !formData.sobrenome || !formData.numeroCelular || !formData.email || !formData.cidade || !formData.endereco) {
       toast({
         title: "Preencha os campos obrigatórios",
-        description: "Nome, sobrenome, CPF e email são obrigatórios.",
+        description: "Nome, sobrenome, número celular, email, cidade e endereço são obrigatórios.",
         variant: "destructive",
       });
       return;
     }
 
-    // validação CPF
-    if (!validarCPF(formData.cpf)) {
-      toast({
-        title: "CPF inválido",
-        description: "Informe um CPF com 11 dígitos (ex.: 000.000.000-00).",
-        variant: "destructive",
-      });
+    // valida telefone fixo (opcional)
+    // if (formData.numeroTelefone && !validarTelefone(formData.numeroTelefone)) {
+    //   toast({
+    //     title: "Telefone inválido",
+    //     description: "Informe um telefone nos formatos 55 51 3333-4444 ou 51 3333-4444 (com ou sem espaços/hífens).",
+    //     variant: "destructive",
+    //   });
+    //   return;
+    // }
+
+    // valida piscina (se preenchida)
+    if (formData.piscinaTamanho && formData.piscinaTamanho.trim().length === 0) {
+      toast({ title: "Piscina: tamanho obrigatório", variant: "destructive" });
       return;
     }
 
-    // validação telefone celular (obrigatório)
-    if (!formData.numeroCelular || !validarTelefone(formData.numeroCelular)) {
-      toast({
-        title: "Celular inválido",
-        description:
-          "Informe um celular nos formatos 55 51 98888-8888 ou 51 98888-8888 (com ou sem espaços/hífens).",
-        variant: "destructive",
-      });
-      return;
-    }
+    // montar payload para criar/atualizar cliente + piscina
+    const payload: any = { ...formData };
+    payload.piscina = {
+      tipo: formData.piscinaTipo || null,
+      tamanho: formData.piscinaTamanho || null,
+      endereco: formData.piscinaSameAddress ? formData.endereco : formData.piscinaEndereco,
+      observacoes: formData.piscinaObservacoes || null,
+    };
 
-    // validação telefone fixo (se preenchido)
-    if (formData.numeroTelefone && !validarTelefone(formData.numeroTelefone)) {
-      toast({
-        title: "Telefone inválido",
-        description:
-          "Informe um telefone nos formatos 55 51 3333-4444 ou 51 3333-4444 (com ou sem espaços/hífens).",
-        variant: "destructive",
-      });
-      return;
-    }
-  
     if (editingClienteId) {
-      await updateCliente(editingClienteId, { ...formData } as any);
-      toast({ title: "Cadastro atualizado com sucesso" });
+      const atualizado = await updateCliente(editingClienteId, payload as any);
+      if (atualizado) {
+        toast({ title: "Cadastro atualizado com sucesso" });
+        setSelectedCliente(atualizado);
+        setViewMode('view');
+      } else {
+        toast({ title: "Erro ao atualizar cliente", variant: "destructive" });
+      }
     } else {
-      await addCliente(formData as any);
-      toast({ title: "Cliente cadastrado com sucesso" });
+      const novo = await addCliente(payload as any);
+      if (novo) {
+        toast({ title: "Cliente cadastrado com sucesso" });
+        setSelectedCliente(novo);
+        setViewMode('view');
+      } else {
+        toast({ title: "Erro ao cadastrar cliente", variant: "destructive" });
+      }
     }
-  
+
     // reset e navegação de tela
     setFormData({
       nome: "",
       sobrenome: "",
-      cpf: "",
-      sexo: "F",
-      dataNascimento: "",
       numeroCelular: "",
       numeroTelefone: "",
       email: "",
-      estado: "",
-      cidade: "",
       endereco: "",
-      complemento: ""
+      cidade: "",
+      observacoes: "",
+      piscinaTipo: "",
+      piscinaTamanho: "",
+      piscinaEndereco: "",
+      piscinaObservacoes: "",
+      piscinaSameAddress: true,
     });
     setShowForm(false);
     setEditingClienteId(null);
@@ -203,19 +216,24 @@ export default function Clientes() {
   };
 
   const handleEditClick = (cliente: Cliente) => {
+    const piscina = (cliente as any).piscina || null;
+    const piscinaEndereco = piscina ? piscina.endereco ?? "" : "";
+    const sameAddress = piscina ? (piscinaEndereco === (cliente as any).endereco || piscinaEndereco === "" ) : true;
+
     setFormData({
-      nome: cliente.nome,
-      sobrenome: cliente.sobrenome,
-      cpf: cliente.cpf,
-      sexo: cliente.sexo,
-      dataNascimento: cliente.dataNascimento,
-      numeroCelular: cliente.numeroCelular,
-      numeroTelefone: cliente.numeroTelefone,
-      email: cliente.email,
-      estado: cliente.estado,
-      cidade: cliente.cidade,
-      endereco: cliente.endereco,
-      complemento: cliente.complemento,
+      nome: cliente.nome || "",
+      sobrenome: cliente.sobrenome || "",
+      numeroCelular: (cliente as any).numero_celular || (cliente as any).numeroCelular || (cliente as any).numero_telefone || (cliente as any).numeroTelefone || (cliente as any).telefone || "",
+      numeroTelefone: (cliente as any).numero_telefone || (cliente as any).numeroTelefone || "",
+      email: cliente.email || "",
+      endereco: cliente.endereco || "",
+      cidade: cliente.cidade || "",
+      observacoes: (cliente as any).observacoes || "",
+      piscinaTipo: piscina ? piscina.tipo ?? "" : "",
+      piscinaTamanho: piscina ? piscina.tamanho ?? "" : "",
+      piscinaEndereco: sameAddress ? cliente.endereco || "" : piscinaEndereco,
+      piscinaObservacoes: piscina ? piscina.observacoes ?? "" : "",
+      piscinaSameAddress: sameAddress,
     });
     setEditingClienteId(cliente.id as string);
     setShowForm(true);
@@ -266,170 +284,188 @@ export default function Clientes() {
 
       {/* FORMULÁRIO */}
       {showForm && (
-        <div ref={formRef}>
-          <Card className="mb-8 border-l-4 border-l-blue-600 shadow-lg">
-            <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200">
-              <CardTitle className="flex items-center gap-2 text-blue-900">
-                <Users size={20} />
-                {editingClienteId ? "Editar Cliente" : "Cadastrar Novo Cliente"}
-              </CardTitle>
-              <p className="text-xs text-blue-700 mt-1">Preencha os dados do cliente</p>
-            </CardHeader>
-            <CardContent className="pt-6">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="nome">Nome: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="nome"
-                      required
-                      value={formData.nome}
-                      onChange={(e) => handleInputChange("nome", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="sobrenome">Sobrenome: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="sobrenome"
-                      required
-                      value={formData.sobrenome}
-                      onChange={(e) => handleInputChange("sobrenome", e.target.value)}
-                    />
-                  </div>
-                </div>
+              <div ref={formRef}>
+                <Card className="mb-8 border-l-4 border-l-blue-600 shadow-lg">
+                  <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200">
+                    <CardTitle className="flex items-center gap-2 text-blue-900">
+                      <Users size={20} />
+                      {editingClienteId ? "Editar Cliente" : "Cadastrar Novo Cliente"}
+                    </CardTitle>
+                    <p className="text-xs text-blue-700 mt-1">Preencha os dados do cliente</p>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="nome">Nome: <span className="text-red-500">*</span></Label>
+                          <Input
+                            id="nome"
+                            required
+                            value={formData.nome}
+                            onChange={(e) => handleInputChange("nome", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="sobrenome">Sobrenome:</Label>
+                          <Input
+                            id="sobrenome"
+                            value={formData.sobrenome}
+                            onChange={(e) => handleInputChange("sobrenome", e.target.value)}
+                            placeholder="Sobrenome"
+                          />
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="cpf">CPF: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="cpf"
-                      required
-                      value={formData.cpf}
-                      onChange={(e) => handleInputChange("cpf", e.target.value)}
-                      placeholder="000.000.000-00"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="sexo">Sexo: <span className="text-red-500">*</span></Label>
-                    <Select value={formData.sexo} onValueChange={(value: 'M' | 'F' | 'Outro') => handleInputChange("sexo", value)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="F">Feminino</SelectItem>
-                        <SelectItem value="M">Masculino</SelectItem>
-                        <SelectItem value="Outro">Outro</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="dataNascimento">Data de Nascimento: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="dataNascimento"
-                      type="date"
-                      required
-                      value={formData.dataNascimento}
-                      onChange={(e) => handleInputChange("dataNascimento", e.target.value)}
-                    />
-                  </div>
-                </div>
+                      <div>
+                        <Label htmlFor="email">E-mail:</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={(e) => handleInputChange("email", e.target.value)}
+                        />
+                      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="numeroCelular">Número Celular: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="numeroCelular"
-                      required
-                      value={formData.numeroCelular}
-                      onChange={(e) => handleInputChange("numeroCelular", e.target.value)}
-                      placeholder="(11) 99999-9999"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="numeroTelefone">Número Telefone:</Label>
-                    <Input
-                      id="numeroTelefone"
-                      value={formData.numeroTelefone}
-                      onChange={(e) => handleInputChange("numeroTelefone", e.target.value)}
-                      placeholder="(11) 3333-4444"
-                    />
-                  </div>
-                </div>
+                      <div>
+                        <Label htmlFor="numeroCelular">Número Celular: <span className="text-red-500">*</span></Label>
+                        <Input
+                          id="numeroCelular"
+                          required
+                          value={formData.numeroCelular}
+                          onChange={(e) => handleInputChange("numeroCelular", e.target.value)}
+                          placeholder="(11) 99999-9999"
+                        />
+                      </div>
 
-                <div>
-                  <Label htmlFor="email">E-mail: <span className="text-red-500">*</span></Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                  />
-                </div>
+                      <div>
+                        <Label htmlFor="numeroTelefone">Número Telefone:</Label>
+                        <Input
+                          id="numeroTelefone"
+                          value={formData.numeroTelefone}
+                          onChange={(e) => handleInputChange("numeroTelefone", e.target.value)}
+                          placeholder="(11) 3333-4444"
+                        />
+                      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="estado">Estado: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="estado"
-                      required
-                      value={formData.estado}
-                      onChange={(e) => handleInputChange("estado", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="cidade">Cidade: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="cidade"
-                      required
-                      value={formData.cidade}
-                      onChange={(e) => handleInputChange("cidade", e.target.value)}
-                    />
-                  </div>
-                </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <Label htmlFor="endereco">Endereço:</Label>
+                          <Input
+                            id="endereco"
+                            value={formData.endereco}
+                            onChange={(e) => handleInputChange("endereco", e.target.value)}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="cidade">Cidade:</Label>
+                          <Input
+                            id="cidade"
+                            value={formData.cidade}
+                            onChange={(e) => handleInputChange("cidade", e.target.value)}
+                          />
+                        </div>
+                      </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="endereco">Endereço: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="endereco"
-                      required
-                      value={formData.endereco}
-                      onChange={(e) => handleInputChange("endereco", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="complemento">Complemento:</Label>
-                    <Input
-                      id="complemento"
-                      value={formData.complemento}
-                      onChange={(e) => handleInputChange("complemento", e.target.value)}
-                    />
-                  </div>
-                </div>
+                      <div>
+                        <Label htmlFor="observacoes">Observações do cliente:</Label>
+                        <textarea
+                          id="observacoes"
+                          value={formData.observacoes}
+                          onChange={(e) => handleInputChange("observacoes", e.target.value)}
+                          className="w-full border rounded px-2 py-1"
+                        />
+                      </div>
 
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white flex-1">
-                    {editingClienteId ? "Salvar Alterações" : "Salvar Cliente"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => {
-                      setEditingClienteId(null);
-                      resetForm();
-                      setShowForm(false);
-                    }}
-                  >
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                      <div className="p-4 border rounded bg-slate-50">
+                        <h3 className="text-sm font-semibold mb-2">Piscina</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <Label htmlFor="piscinaTipo">Tipo</Label>
+                            <Input
+                              id="piscinaTipo"
+                              value={formData.piscinaTipo}
+                              onChange={(e) => handleInputChange("piscinaTipo", e.target.value)}
+                              placeholder="Ex: azulejo, vinil, fibra"
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="piscinaTamanho">Tamanho</Label>
+                            <Input
+                              id="piscinaTamanho"
+                              value={formData.piscinaTamanho}
+                              onChange={(e) => handleInputChange("piscinaTamanho", e.target.value)}
+                              placeholder="Ex: 8x4, 10m"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 mb-3">
+                          <input
+                            id="piscinaSameAddress"
+                            type="checkbox"
+                            checked={!!formData.piscinaSameAddress}
+                            onChange={(e) => {
+                              handleInputChange("piscinaSameAddress", e.target.checked);
+                              if (e.target.checked) handleInputChange("piscinaEndereco", formData.endereco || "");
+                            }}
+                            className="w-4 h-4"
+                          />
+                          <Label htmlFor="piscinaSameAddress">Endereço da piscina é igual ao endereço do cliente</Label>
+                        </div>
+
+                        <div className="mb-3">
+                          <Label htmlFor="piscinaEndereco">Endereço da piscina</Label>
+                          <Input
+                            id="piscinaEndereco"
+                            value={formData.piscinaEndereco}
+                            onChange={(e) => handleInputChange("piscinaEndereco", e.target.value)}
+                            placeholder="Endereço da piscina"
+                            disabled={!!formData.piscinaSameAddress}
+                          />
+                        </div>
+
+                        <div className="mb-3">
+                          <Label htmlFor="piscinaObservacoes">Observações da piscina</Label>
+                          <textarea
+                            id="piscinaObservacoes"
+                            value={formData.piscinaObservacoes}
+                            onChange={(e) => handleInputChange("piscinaObservacoes", e.target.value)}
+                            className="w-full border rounded px-2 py-1"
+                          />
+                        </div>
+                      </div>
+
+                     
+
+                      <div className="flex gap-2 pt-4">
+                        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white flex-1">
+                          {editingClienteId ? "Salvar Alterações" : "Salvar Cliente"}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={async () => {
+                            setEditingClienteId(null);
+                            resetForm();
+                            setShowForm(false);
+                            setSelectedCliente(null);
+                            setViewMode('list');
+                            try {
+                              await refreshClientes();
+                            } catch (e) {
+                              console.error("Erro ao recarregar clientes após cancelar:", e);
+                            }
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
       {/* Client List */}
       {viewMode === 'list' && (
@@ -508,9 +544,6 @@ export default function Clientes() {
                 <div>
                   <CardTitle className="text-2xl flex items-center gap-2">
                     <span>{selectedCliente.nome} {selectedCliente.sobrenome}</span>
-                    <Badge variant="outline" className="text-xs">
-                      {selectedCliente.sexo === 'M' ? 'Masculino' : selectedCliente.sexo === 'F' ? 'Feminino' : 'Outro'}
-                    </Badge>
                   </CardTitle>
                   <p className="text-xs text-muted-foreground mt-1">
                     Cliente desde{" "}
@@ -527,14 +560,6 @@ export default function Clientes() {
             <CardContent className="space-y-6 pt-4 text-sm">
               {/* Linha de chips principais */}
               <div className="flex flex-wrap gap-2 text-xs">
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <span className="font-medium">CPF</span>
-                  <span>{selectedCliente.cpf}</span>
-                </Badge>
-                <Badge variant="secondary" className="flex items-center gap-1">
-                  <span className="font-medium">Nascimento</span>
-                  <span>{selectedCliente.dataNascimento}</span>
-                </Badge>
                 {selectedCliente.numeroTelefone && (
                   <Badge variant="secondary" className="flex items-center gap-1">
                     <span className="font-medium">Telefone</span>
@@ -553,22 +578,7 @@ export default function Clientes() {
                     <div>
                       <span className="font-medium text-foreground">Nome completo: </span>
                       <span>{selectedCliente.nome} {selectedCliente.sobrenome}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-foreground">Sexo: </span>
-                      <span>{selectedCliente.sexo}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium text-foreground">Data de nascimento: </span>
-                      <span>{selectedCliente.dataNascimento}</span>
-                    </div>
-                  </div>
-
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Contato
-                  </h3>
-                  <div className="rounded-lg border bg-slate-50/60 p-3 space-y-1">
-                    <div>
+                      <div>
                       <span className="font-medium text-foreground">Email: </span>
                       <span>{selectedCliente.email}</span>
                     </div>
@@ -582,6 +592,7 @@ export default function Clientes() {
                         <span>{selectedCliente.numeroTelefone}</span>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
 
@@ -605,17 +616,50 @@ export default function Clientes() {
                 </div>
               </div>
 
+              {/* Piscina do cliente */}
+              <div className="mt-4">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Piscina</h3>
+                <div className="rounded-lg border bg-slate-50/60 p-3 space-y-1 text-sm">
+                  {(selectedCliente as any).piscina ? (
+                    <>
+                      <div>
+                        <span className="font-medium text-foreground">Tipo: </span>
+                        <span>{(selectedCliente as any).piscina.tipo ?? "-"}</span>
+                      </div>
+                      <div>
+                        <span className="font-medium text-foreground">Tamanho: </span>
+                        <span>{(selectedCliente as any).piscina.tamanho ?? "-"}</span>
+                      </div>
+                      {(selectedCliente as any).piscina.endereco && (
+                        <div>
+                          <span className="font-medium text-foreground">Endereço: </span>
+                          <span>{(selectedCliente as any).piscina.endereco}</span>
+                        </div>
+                      )}
+                      {(selectedCliente as any).piscina.observacoes && (
+                        <div>
+                          <span className="font-medium text-foreground">Observações: </span>
+                          <span>{(selectedCliente as any).piscina.observacoes}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">Nenhuma piscina cadastrada para este cliente.</div>
+                  )}
+                </div>
+              </div>
+
               {/* Ações */}
               <div className="mt-4 flex gap-2 justify-end">
-                <Button onClick={handleBackFromView} variant="outline" className="px-4">
-                  Voltar
-                </Button>
-                <Button
-                  onClick={handleEditFromView}
-                  className="bg-primary hover:bg-primary-hover text-primary-foreground px-4"
-                >
-                  Editar cadastro
-                </Button>
+                 <Button onClick={handleBackFromView} variant="outline" className="px-4">
+                   Voltar
+                 </Button>
+                 <Button
+                   onClick={handleEditFromView}
+                   className="bg-primary hover:bg-primary-hover text-primary-foreground px-4"
+                 >
+                   Editar cadastro
+                 </Button>
               </div>
             </CardContent>
           </Card>

@@ -604,9 +604,9 @@ export default function Eventos() {
     <div className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold text-foreground">Eventos</h1>
+        <h1 className="text-4xl font-bold text-foreground">Serviços</h1>
         <p className="text-muted-foreground mt-2">
-          Gerencie seus Eventos e festas
+          Gerencie seus Serviços
         </p>
       </div>
 
@@ -622,7 +622,7 @@ export default function Eventos() {
           }}
         >
           <Plus size={18} />
-          {showForm ? "Cancelar" : editingEventoId ? "Editar Evento" : "Cadastrar Evento"}
+          {showForm ? "Cancelar" : editingEventoId ? "Editar Serviço" : "Agendar Serviço"}
         </Button>
       </div>
 
@@ -632,7 +632,7 @@ export default function Eventos() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
               <Input
-                placeholder="Pesquisar evento"
+                placeholder="Pesquisar serviço"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -647,9 +647,9 @@ export default function Eventos() {
           <Card className="mb-8 border-l-4 border-l-blue-600 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200">
               <CardTitle className="text-blue-900">
-                {editingEventoId ? "Editar evento" : "Cadastrar evento"}
+                {editingEventoId ? "Editar serviço" : "Agendar serviço"}
               </CardTitle>
-              <p className="text-xs text-blue-700 mt-1">Configure todos os detalhes do evento</p>
+              <p className="text-xs text-blue-700 mt-1">Configure todos os detalhes do serviço</p>
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSubmit} className="space-y-6">
@@ -1118,7 +1118,7 @@ export default function Eventos() {
                     type="submit"
                     className="bg-primary hover:bg-primary-hover text-primary-foreground px-8"
                   >
-                    {editingEventoId ? "Salvar alterações" : "Cadastrar Evento"}
+                    {editingEventoId ? "Salvar alterações" : "Agendar"}
                   </Button>
                   {editingEventoId && (
                     <Button
@@ -1142,7 +1142,7 @@ export default function Eventos() {
             <Card className="bg-white border-blue-200">
               <CardContent className="p-12 text-center">
                 <div className="text-muted-foreground">
-                  {searchTerm ? "Nenhum evento encontrado com os critérios de busca." : "Nenhum evento cadastrado ainda."}
+                  {searchTerm ? "Nenhum evento encontrado com os critérios de busca." : "Nenhum serviço agendado ainda."}
                 </div>
                 {!searchTerm && (
                   <Button 
@@ -1150,7 +1150,7 @@ export default function Eventos() {
                     onClick={() => setShowForm(true)}
                   >
                     <Plus size={16} className="mr-2" />
-                    Cadastrar primeiro evento
+                    Agendar primeiro serviço
                   </Button>
                 )}
               </CardContent>
