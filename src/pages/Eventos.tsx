@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,622 +7,633 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Search, Plus, Calendar, Clock, MapPin, Edit, CheckCircle2, Users } from "lucide-react";
-import { useAppContext } from "@/contexts/AppContext";
-import { getClientesSummary, getClienteWithPiscinas, createServicoComCobrancaEPagamento } from "@/services/supabaseApi";
-import { usePacotesContext } from "@/contexts/PacotesContext";
-import { useAdicionaisContext } from "@/contexts/AdicionaisContext";
-import { useEquipesContext } from "@/contexts/EquipesContext";
-import { Evento } from "@/types";
+import { Search, Plus, Calendar, Clock, MapPin, Edit, CheckCircle2, Waves, DollarSign, X, CreditCard, History } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabaseClient";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface Cliente {
+  id: string;
+  nome: string;
+  sobrenome: string;
+  numero_celular: string;
+  email: string;
+}
+
+interface Piscina {
+  id: string;
+  client_id: string;
+  tipo: string | null;
+  tamanho: string;
+  endereco: string | null;
+  observacoes: string | null;
+}
+
+interface Servico {
+  id: string;
+  user_id: string;
+  client_id: string;
+  piscina_id: string;
+  tipo_servico: string | null;
+  data_agendamento: string | null;
+  horario: string | null;
+  status: string | null;
+  observacoes: string | null;
+  created_at: string;
+  cliente_nome?: string;
+  piscina_tamanho?: string;
+}
+
+interface Cobranca {
+  id: string;
+  servico_id: string;
+  valor: number;
+  data_vencimento: string;
+  status: string | null;
+}
+
+interface Pagamento {
+  id: string;
+  cobranca_id: string;
+  data_pagamento: string | null;
+  valor_pago: number | null;
+  forma_pagamento: string | null;
+  observacoes: string | null;
+  created_at: string;
+}
+
+interface FormData {
+  clienteId: string;
+  piscinaId: string;
+  tipoServico: string;
+  dataAgendamento: string;
+  horario: string;
+  status: string;
+  observacoes: string;
+  valor: number | undefined;
+  dataVencimento: string;
+  valorEntrada: number | undefined;
+  formaPagamento: string;
+}
+
+interface NovoPagamentoForm {
+  valorPago: number | undefined;
+  formaPagamento: string;
+  dataPagamento: string;
+  observacoes: string;
+}
+
+const FORM_INITIAL: FormData = {
+  clienteId: "",
+  piscinaId: "",
+  tipoServico: "",
+  dataAgendamento: "",
+  horario: "",
+  status: "agendado",
+  observacoes: "",
+  valor: undefined,
+  dataVencimento: "",
+  valorEntrada: undefined,
+  formaPagamento: "",
+};
+
+const PAGAMENTO_FORM_INITIAL: NovoPagamentoForm = {
+  valorPago: undefined,
+  formaPagamento: "",
+  dataPagamento: new Date().toISOString().split("T")[0],
+  observacoes: "",
+};
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export default function Eventos() {
   const location = useLocation();
   const locationShowForm = (location.state as any)?.showForm as boolean | undefined;
-  const { Eventos, clientes, addEvento, updateEvento, removeEvento } = useAppContext();
-  const { pacotes } = usePacotesContext();
-  const { adicionais } = useAdicionaisContext();
-  const { equipes } = useEquipesContext();
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showForm, setShowForm] = useState(!!locationShowForm);
-
-  // --- novos estados para serviços ---
-  const [clientesList, setClientesList] = useState<{id:string,nome:string,sobrenome:string}[]>([]);
-  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
-  const [selectedClientDetails, setSelectedClientDetails] = useState<any>(null);
-  const [piscinasList, setPiscinasList] = useState<any[]>([]);
-  const [selectedPiscinaId, setSelectedPiscinaId] = useState<string | null>(null);
-
-  const [tipoServico, setTipoServico] = useState("");
-  const [dataAgendamento, setDataAgendamento] = useState("");
-  const [horario, setHorario] = useState("");
-  const [valor, setValor] = useState<number | null>(null);
-  const [dataVencimento, setDataVencimento] = useState("");
-  const [valorEntrada, setValorEntrada] = useState<number | null>(null);
-  const [formaPagamento, setFormaPagamento] = useState("");
-  const [observacoesServico, setObservacoesServico] = useState("");
-
-  const [editingEventoId, setEditingEventoId] = useState<string | null>(null);
-  const [selectedEventoId, setSelectedEventoId] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState<Partial<Evento>>({
-    titulo: "",
-    clienteId: "",
-    clienteNome: "",
-    data: "",
-    horaInicio: "",
-    horaFim: "",
-    tipo: "festa",
-    status: "pendente",
-    observacoes: "",
-    valor: 0,
-    pacoteId: "",
-    convidados: undefined,
-    decoracao: "",
-    equipeId: "",
-    equipeProfissionais: [],
-    adicionaisIds: [],
-    valorEntrada: undefined,
-    formaPagamento: "",
-    aniversariantes: [], // [{ nome, idade? }]
-  });
-
-  const [adicionaisObservacoesMap, setAdicionaisObservacoesMap] = useState<Record<string, string>>({});
-  const [adicionaisQuantidadeMap, setAdicionaisQuantidadeMap] = useState<Record<string, number>>({});
-
-  const [eventoEquipeProfissionais, setEventoEquipeProfissionais] = useState<
-    { id: string; nome: string; quantidade: number }[]
-  >([]);
-
+  const locationEditId = (location.state as any)?.editId as string | undefined;
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  const filteredEventos = Eventos.filter(evento =>
-    evento.titulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    evento.clienteNome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    evento.tipo.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // --- data ---
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [piscinas, setPiscinas] = useState<Piscina[]>([]);
+  const [servicos, setServicos] = useState<Servico[]>([]);
+  const [loadingClientes, setLoadingClientes] = useState(false);
+  const [loadingPiscinas, setLoadingPiscinas] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const selectedEvento = selectedEventoId
-    ? Eventos.find(e => e.id === selectedEventoId) ?? null
-    : null;
+  // --- ui ---
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showForm, setShowForm] = useState(!!locationShowForm);
+  const [editingServicoId, setEditingServicoId] = useState<string | null>(null);
+  const [selectedServicoId, setSelectedServicoId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<FormData>(FORM_INITIAL);
 
-  const handleInputChange = (field: keyof Evento, value: string | number | string[] | undefined) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-  };
+  // --- pagamentos modal ---
+  const [pagamentoModal, setPagamentoModal] = useState<{
+    servicoId: string;
+    clienteNome: string;
+    cobranca: Cobranca | null;
+    pagamentos: Pagamento[];
+    loading: boolean;
+  } | null>(null);
+  const [novoPagamentoForm, setNovoPagamentoForm] = useState<NovoPagamentoForm>(PAGAMENTO_FORM_INITIAL);
+  const [salvandoPagamento, setSalvandoPagamento] = useState(false);
 
-  const handleClienteSelect = async (clienteId: string) => {
-    // adaptar para uso no fluxo de servicos
-    setSelectedClientId(clienteId);
-    setSelectedClientDetails(null);
-    setPiscinasList([]);
-    setSelectedPiscinaId(null);
+  // --- cobranca dos detalhes ---
+  const [selectedCobranca, setSelectedCobranca] = useState<Cobranca | null>(null);
 
-    try {
-      const res = await getClienteWithPiscinas(clienteId);
-      if (res) {
-        setSelectedClientDetails(res.cliente);
-        setPiscinasList(res.piscinas || []);
-      }
-    } catch (err) {
-      console.error('[handleClienteSelect] Erro ao buscar cliente/piscinas:', err);
-    }
+  const showFormRef = useRef<HTMLDivElement>(null);
+  const selectedRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
 
-    // também manter compatibilidade com o formulário de eventos antigo
-    const cliente = clientes.find(c => c.id === clienteId);
-    setFormData(prev => ({
-      ...prev,
-      clienteId,
-      clienteNome: cliente ? `${cliente.nome} ${cliente.sobrenome}` : ""
-    }));
-  };
-
-  const handlePacoteSelect = (pacoteId: string) => {
-    const pacote = pacotes.find(p => p.id === pacoteId);
-    setFormData(prev => ({
-      ...prev,
-      pacoteId,
-      convidados: prev.convidados, // mantém o que o usuário já tinha digitado
-    }));
-  };
-
-  const handleEquipeSelect = (equipeId: string) => {
-    const equipe = equipes.find(e => e.id === equipeId);
-    setFormData(prev => ({
-      ...prev,
-      equipeId,
-    }));
-    if (equipe) {
-      setEventoEquipeProfissionais(
-        equipe.profissionais.map(p => ({
-          id: p.id,
-          nome: p.nome,
-          quantidade: p.quantidade,
-        }))
-      );
-    } else {
-      setEventoEquipeProfissionais([]);
-    }
-  };
-
-  const handleAdicionalToggle = (adicionalId: string) => {
-    setFormData(prev => {
-      const current = prev.adicionaisIds || [];
-      const exists = current.includes(adicionalId);
-      const nextIds = exists
-        ? current.filter(id => id !== adicionalId)
-        : [...current, adicionalId];
-
-      if (exists) {
-        setAdicionaisObservacoesMap(prevMap => {
-          const copy = { ...prevMap };
-          delete copy[adicionalId];
-          return copy;
-        });
-        setAdicionaisQuantidadeMap(prevMap => {
-          const copy = { ...prevMap };
-          delete copy[adicionalId];
-          return copy;
-        });
-      }
-
-      return {
-        ...prev,
-        adicionaisIds: nextIds,
-      };
-    });
-  };
-
-  const handleAdicionalObservacaoChange = (adicionalId: string, value: string) => {
-    setAdicionaisObservacoesMap(prev => ({
-      ...prev,
-      [adicionalId]: value,
-    }));
-  };
-
-  const handleAdicionalQuantidadeChange = (adicionalId: string, valueStr: string) => {
-    const value = valueStr === "" ? 0 : Number(valueStr) || 0;
-    setAdicionaisQuantidadeMap(prev => ({
-      ...prev,
-      [adicionalId]: value,
-    }));
-  };
-
-  const handleEquipeProfissionalChange = (id: string, quantidade: number) => {
-    setEventoEquipeProfissionais(prev =>
-      prev.map(p => (p.id === id ? { ...p, quantidade } : p))
-    );
-  };
-
-  const handleAniversarianteChange = (
-    index: number,
-    field: "nome" | "idade",
-    value: string
-  ) => {
-    setFormData(prev => {
-      const list = prev.aniversariantes ? [...prev.aniversariantes] : [];
-      const item = list[index] ?? { nome: "" };
-      if (field === "nome") {
-        item.nome = value;
+  // ---------------------------------------------------------------------------
+  // Load clientes
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    async function fetchClientes() {
+      setLoadingClientes(true);
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("id, nome, sobrenome, numero_celular, email")
+        .order("nome");
+      if (error) {
+        toast({ title: "Erro ao carregar clientes", description: error.message, variant: "destructive" });
       } else {
-        item.idade = value === "" ? undefined : Number(value) || 0;
+        setClientes(data ?? []);
       }
-      list[index] = item;
-      return { ...prev, aniversariantes: list };
-    });
-  };
-
-  const handleAddAniversariante = () => {
-    setFormData(prev => ({
-      ...prev,
-      aniversariantes: [...(prev.aniversariantes || []), { nome: "", idade: undefined }],
-    }));
-  };
-
-  const handleRemoveAniversariante = (index: number) => {
-    setFormData(prev => {
-      const list = prev.aniversariantes ? [...prev.aniversariantes] : [];
-      list.splice(index, 1);
-      return { ...prev, aniversariantes: list };
-    });
-  };
-
-  const selectedPacote = useMemo(
-    () => (formData.pacoteId ? pacotes.find(p => p.id === formData.pacoteId) || undefined : undefined),
-    [formData.pacoteId, pacotes]
-  );
-
-  const selecionadosAdicionais = useMemo(
-    () =>
-      (formData.adicionaisIds || []).map(id => adicionais.find(a => a.id === id)).filter(Boolean),
-    [formData.adicionaisIds, adicionais]
-  ) as typeof adicionais;
-
-  const diffHorasPacote = useMemo(() => {
-    if (!selectedPacote || !formData.horaInicio || !formData.horaFim) {
-      return {
-        extra: 0,
-        extraInt: 0,
-        deficit: 0,
-        deficitInt: 0,
-        hasExtra: false,
-        hasDeficit: false,
-        duracaoHoras: 0,
-      };
+      setLoadingClientes(false);
     }
-
-    const [hiH, hiM] = formData.horaInicio.split(":").map(Number);
-    const [hfH, hfM] = formData.horaFim.split(":").map(Number);
-    const inicioMin = hiH * 60 + hiM;
-    let fimMin = hfH * 60 + hfM;
-    
-    // Se o horário de fim for menor que o de início, significa que passou da meia-noite
-    // Adiciona 24h (1440 minutos) ao horário de fim
-    if (fimMin <= inicioMin) {
-      fimMin += 24 * 60; // Adiciona 1440 minutos (24 horas)
-    }
-
-    const duracaoMin = fimMin - inicioMin;
-    const duracaoHoras = duracaoMin / 60;
-
-    const extra = Math.max(0, duracaoHoras - selectedPacote.duracaoHoras);
-    const deficit = Math.max(0, selectedPacote.duracaoHoras - duracaoHoras);
-
-    const extraInt = Math.ceil(extra);
-    const deficitInt = Math.ceil(deficit);
-
-    return {
-      extra,
-      extraInt,
-      deficit,
-      deficitInt,
-      hasExtra: extraInt > 0,
-      hasDeficit: deficitInt > 0,
-      duracaoHoras,
-    };
-  }, [selectedPacote, formData.horaInicio, formData.horaFim]);
-
-  const [valorEditadoManualmente, setValorEditadoManualmente] = useState(false);
-
-  const valorCalculado = useMemo(() => {
-    if (!selectedPacote) return 0;
-
-    const base = selectedPacote.valorBase;
-    const convidadosEvento = formData.convidados || selectedPacote.convidadosBase;
-    const excedente = Math.max(0, convidadosEvento - selectedPacote.convidadosBase);
-    const valorExcedente = excedente * selectedPacote.valorPorPessoa;
-
-    const valorAdicionais = selecionadosAdicionais.reduce((sum, a) => {
-      if (a.modelo === "valor_festa") {
-        return sum + a.valor;
-      }
-
-      if (a.modelo === "valor_unidade") {
-        const qtd = adicionaisQuantidadeMap[a.id] ?? 0;
-        return sum + a.valor * qtd;
-      }
-
-      const convidados = convidadosEvento || 0;
-      return sum + a.valor * convidados;
-    }, 0);
-
-    return base + valorExcedente + valorAdicionais;
-  }, [
-    selectedPacote,
-    formData.convidados,
-    selecionadosAdicionais,
-    adicionaisQuantidadeMap,
-  ]);
-
-  useEffect(() => {
-    if (!selectedPacote) return;
-    if (valorEditadoManualmente) return;
-
-    setFormData(prev => ({
-      ...prev,
-      valor: valorCalculado,
-    }));
-  }, [valorCalculado, selectedPacote, valorEditadoManualmente]);
-
-  // carregar lista de clientes para dropdown de serviços
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const clients = await getClientesSummary();
-        setClientesList(clients);
-      } catch (err) {
-        console.error('[Eventos] Erro ao carregar clientes summary:', err);
-      }
-    };
-    load();
+    fetchClientes();
   }, []);
 
-  const valorDigitado = formData.valor ?? 0;
-  const diffValor = valorDigitado - valorCalculado;
-  const hasDiffValor = Math.abs(diffValor) >= 0.01;
+  // ---------------------------------------------------------------------------
+  // Load servicos
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    fetchServicos();
+  }, []);
 
-  const handleConvidadosChange = (valorStr: string) => {
-    const valor = valorStr === "" ? undefined : Number(valorStr) || 0;
-    setFormData(prev => ({
-      ...prev,
-      convidados: valor,
+  async function fetchServicos() {
+    const { data, error } = await supabase
+      .from("servicos")
+      .select(`
+        id, user_id, client_id, piscina_id,
+        tipo_servico, data_agendamento, horario, status, observacoes, created_at,
+        clientes(nome, sobrenome),
+        piscinas(tamanho)
+      `)
+      .order("data_agendamento", { ascending: false });
+
+    if (error) {
+      toast({ title: "Erro ao carregar serviços", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    const mapped: Servico[] = (data ?? []).map((s: any) => ({
+      ...s,
+      cliente_nome: s.clientes ? `${s.clientes.nome} ${s.clientes.sobrenome}` : "",
+      piscina_tamanho: s.piscinas?.tamanho ?? "",
     }));
-  };
+    setServicos(mapped);
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ---------------------------------------------------------------------------
+  // Cobrança dos detalhes
+  // ---------------------------------------------------------------------------
+  async function fetchCobrancaDoServico(servicoId: string) {
+    setSelectedCobranca(null);
+    const { data } = await supabase
+      .from("cobrancas")
+      .select("id, servico_id, valor, data_vencimento, status")
+      .eq("servico_id", servicoId)
+      .single();
+    setSelectedCobranca(data ?? null);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pagamentos: abrir modal e carregar dados
+  // ---------------------------------------------------------------------------
+  async function abrirPagamentos(servicoId: string, clienteNome: string) {
+    setPagamentoModal({ servicoId, clienteNome, cobranca: null, pagamentos: [], loading: true });
+    setNovoPagamentoForm(PAGAMENTO_FORM_INITIAL);
+
+    const { data: cobrancaData, error: cobrancaError } = await supabase
+      .from("cobrancas")
+      .select("id, servico_id, valor, data_vencimento, status")
+      .eq("servico_id", servicoId)
+      .single();
+
+    if (cobrancaError || !cobrancaData) {
+      toast({ title: "Cobrança não encontrada para este serviço.", variant: "destructive" });
+      setPagamentoModal(null);
+      return;
+    }
+
+    const { data: pagamentosData } = await supabase
+      .from("pagamentos")
+      .select("id, cobranca_id, data_pagamento, valor_pago, forma_pagamento, observacoes, created_at")
+      .eq("cobranca_id", cobrancaData.id)
+      .order("created_at", { ascending: true });
+
+    setPagamentoModal({
+      servicoId,
+      clienteNome,
+      cobranca: cobrancaData,
+      pagamentos: pagamentosData ?? [],
+      loading: false,
+    });
+
+    setTimeout(() => modalRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pagamentos: registrar novo
+  // ---------------------------------------------------------------------------
+  async function handleRegistrarPagamento() {
+    if (!pagamentoModal?.cobranca) return;
+
+    if (!novoPagamentoForm.valorPago || novoPagamentoForm.valorPago <= 0) {
+      toast({ title: "Informe um valor válido.", variant: "destructive" });
+      return;
+    }
+    if (!novoPagamentoForm.formaPagamento) {
+      toast({ title: "Informe a forma de pagamento.", variant: "destructive" });
+      return;
+    }
+
+    const totalPago = pagamentoModal.pagamentos.reduce((s, p) => s + (p.valor_pago ?? 0), 0);
+    const saldo = pagamentoModal.cobranca.valor - totalPago;
+
+    if (novoPagamentoForm.valorPago > saldo + 0.001) {
+      toast({
+        title: "Valor excede o saldo devedor.",
+        description: `Saldo restante: R$ ${saldo.toFixed(2).replace(".", ",")}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSalvandoPagamento(true);
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { error } = await supabase.from("pagamentos").insert({
+      user_id: user?.id,
+      cobranca_id: pagamentoModal.cobranca.id,
+      data_pagamento: novoPagamentoForm.dataPagamento,
+      valor_pago: novoPagamentoForm.valorPago,
+      forma_pagamento: novoPagamentoForm.formaPagamento,
+      observacoes: novoPagamentoForm.observacoes || null,
+    });
+
+    if (error) {
+      toast({ title: "Erro ao registrar pagamento", description: error.message, variant: "destructive" });
+      setSalvandoPagamento(false);
+      return;
+    }
+
+    // Atualiza status da cobrança
+    const novoTotalPago = totalPago + novoPagamentoForm.valorPago;
+    const novoStatus = novoTotalPago >= pagamentoModal.cobranca.valor - 0.001 ? "pago" : "parcial";
+
+    await supabase
+      .from("cobrancas")
+      .update({ status: novoStatus })
+      .eq("id", pagamentoModal.cobranca.id);
+
+    toast({ title: "Pagamento registrado com sucesso!" });
+    setNovoPagamentoForm(PAGAMENTO_FORM_INITIAL);
+
+    // Recarrega dados do modal
+    await abrirPagamentos(pagamentoModal.servicoId, pagamentoModal.clienteNome);
+    setSalvandoPagamento(false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pagamentos: remover
+  // ---------------------------------------------------------------------------
+  async function handleRemoverPagamento(pagamentoId: string) {
+    if (!pagamentoModal?.cobranca) return;
+
+    const { error } = await supabase.from("pagamentos").delete().eq("id", pagamentoId);
+    if (error) {
+      toast({ title: "Erro ao remover pagamento", description: error.message, variant: "destructive" });
+      return;
+    }
+
+    // Recalcula status após remoção
+    const restantes = pagamentoModal.pagamentos.filter(p => p.id !== pagamentoId);
+    const novoTotal = restantes.reduce((s, p) => s + (p.valor_pago ?? 0), 0);
+    const novoStatus =
+      novoTotal <= 0
+        ? "pendente"
+        : novoTotal >= pagamentoModal.cobranca.valor - 0.001
+        ? "pago"
+        : "parcial";
+
+    await supabase
+      .from("cobrancas")
+      .update({ status: novoStatus })
+      .eq("id", pagamentoModal.cobranca.id);
+
+    toast({ title: "Pagamento removido." });
+    await abrirPagamentos(pagamentoModal.servicoId, pagamentoModal.clienteNome);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Cliente select → carrega piscinas
+  // ---------------------------------------------------------------------------
+  async function handleClienteSelect(clienteId: string) {
+    setFormData(prev => ({ ...prev, clienteId, piscinaId: "" }));
+    setPiscinas([]);
+    if (!clienteId) return;
+
+    setLoadingPiscinas(true);
+    const { data, error } = await supabase
+      .from("piscinas")
+      .select("id, client_id, tipo, tamanho, endereco, observacoes")
+      .eq("client_id", clienteId);
+
+    if (error) {
+      toast({ title: "Erro ao carregar piscinas", description: error.message, variant: "destructive" });
+    } else {
+      const lista = data ?? [];
+      setPiscinas(lista);
+      if (lista.length === 1) setFormData(prev => ({ ...prev, piscinaId: lista[0].id }));
+    }
+    setLoadingPiscinas(false);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Submit agendamento
+  // ---------------------------------------------------------------------------
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // validar campos do fluxo de serviços
-    if (!selectedClientId) {
-      toast({ title: 'Cliente não selecionado', variant: 'destructive' });
-      return;
-    }
-    if (piscinasList.length > 0 && !selectedPiscinaId) {
-      toast({ title: 'Selecione a piscina do cliente', variant: 'destructive' });
-      return;
-    }
-    if (!tipoServico || !dataAgendamento || !horario) {
-      toast({ title: 'Preencha tipo, data e horário do serviço', variant: 'destructive' });
-      return;
-    }
-    if (valor == null || isNaN(Number(valor))) {
-      toast({ title: 'Informe o valor da cobrança', variant: 'destructive' });
-      return;
-    }
-    if (!dataVencimento) {
-      toast({ title: 'Informe a data de vencimento da cobrança', variant: 'destructive' });
+    if (
+      !formData.clienteId ||
+      !formData.piscinaId ||
+      !formData.dataAgendamento ||
+      !formData.horario ||
+      !formData.tipoServico ||
+      (!editingServicoId && (!formData.formaPagamento || formData.valor == null))
+    ) {
+      toast({
+        title: "Campos obrigatórios",
+        description: "Preencha cliente, piscina, tipo, data, horário, valor e forma de pagamento.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const payload = {
-      clienteId: selectedClientId!,
-      piscinaId: selectedPiscinaId || (piscinasList[0]?.id ?? null),
-      tipo_servico: tipoServico || null,
-      data_agendamento: dataAgendamento || null,
-      horario: horario || null,
-      observacoes: observacoesServico || null,
-      valor: valor ?? null,
-      data_vencimento: dataVencimento || null,
-      valor_entrada: valorEntrada ?? null,
-      forma_pagamento: formaPagamento || null,
-    };
+    setSubmitting(true);
 
     try {
-      const res = await createServicoComCobrancaEPagamento(payload);
-      console.log('[Eventos] createServico result:', res);
-      toast({ title: 'Serviço agendado', description: 'Serviço, cobrança e pagamento (se aplicável) criados com sucesso.' });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado.");
 
-      // limpar formulário e fechar
-      setTipoServico('');
-      setDataAgendamento('');
-      setHorario('');
-      setValor(null);
-      setDataVencimento('');
-      setValorEntrada(null);
-      setFormaPagamento('');
-      setObservacoesServico('');
-      setSelectedClientId(null);
-      setSelectedClientDetails(null);
-      setPiscinasList([]);
-      setSelectedPiscinaId(null);
-      setShowForm(false);
+      if (editingServicoId) {
+        const { error } = await supabase
+          .from("servicos")
+          .update({
+            client_id: formData.clienteId,
+            piscina_id: formData.piscinaId,
+            tipo_servico: formData.tipoServico,
+            data_agendamento: formData.dataAgendamento,
+            horario: formData.horario,
+            status: formData.status,
+            observacoes: formData.observacoes || null,
+          })
+          .eq("id", editingServicoId);
+        if (error) throw error;
+        toast({ title: "Serviço atualizado com sucesso!" });
+        await fetchServicos();
+        handleCancelForm();
+      } else {
+        // INSERT servico
+        const { data: servicoData, error: servicoError } = await supabase
+          .from("servicos")
+          .insert({
+            user_id: user.id,
+            client_id: formData.clienteId,
+            piscina_id: formData.piscinaId,
+            tipo_servico: formData.tipoServico,
+            data_agendamento: formData.dataAgendamento,
+            horario: formData.horario,
+            status: formData.status,
+            observacoes: formData.observacoes || null,
+          })
+          .select("id")
+          .single();
+        if (servicoError) throw servicoError;
 
-    } catch (err) {
-      console.error('[Eventos] Erro ao criar serviço+cobrança+pagamento:', err);
-      toast({ title: 'Erro ao agendar serviço', description: String(err), variant: 'destructive' });
-    }
-  };
+        const servicoId = servicoData.id;
 
-  const handleEditEvento = (id: string) => {
-    const ev = Eventos.find(e => e.id === id);
-    if (!ev) {
-      console.warn("[handleEditEvento] Evento não encontrado:", id);
-      return;
-    }
+        // INSERT cobranca
+        const { data: cobrancaData, error: cobrancaError } = await supabase
+          .from("cobrancas")
+          .insert({
+            user_id: user.id,
+            client_id: formData.clienteId,
+            servico_id: servicoId,
+            valor: formData.valor,
+            data_vencimento: formData.dataVencimento || formData.dataAgendamento,
+            status: "pendente",
+          })
+          .select("id")
+          .single();
+        if (cobrancaError) throw cobrancaError;
 
-    console.log("[handleEditEvento] Evento encontrado:", {
-      clienteId: ev.clienteId,
-      pacoteId: ev.pacoteId,
-      titulo: ev.titulo,
-    });
+        // INSERT pagamento de entrada (se houver)
+        if (formData.valorEntrada && formData.valorEntrada > 0) {
+          const { error: pagamentoError } = await supabase.from("pagamentos").insert({
+            user_id: user.id,
+            cobranca_id: cobrancaData.id,
+            data_pagamento: new Date().toISOString().split("T")[0],
+            valor_pago: formData.valorEntrada,
+            forma_pagamento: formData.formaPagamento,
+          });
+          if (pagamentoError) throw pagamentoError;
 
-    // Popula os dados do evento
-    setFormData({
-      titulo: ev.titulo,
-      clienteId: ev.clienteId || "",  // garantir que não é undefined
-      clienteNome: ev.clienteNome || "",
-      data: ev.data,
-      horaInicio: ev.horaInicio,
-      horaFim: ev.horaFim || "",
-      tipo: ev.tipo === "aniversario" ? "festa" : ev.tipo,
-      status: ev.status,
-      observacoes: ev.observacoes || "",
-      valor: ev.valor || 0,
-      pacoteId: ev.pacoteId || "",  // garantir que não é undefined
-      convidados: ev.convidados ?? 0,
-      decoracao: ev.decoracao || "",
-      equipeId: ev.equipeId || "",
-      equipeProfissionais: ev.equipeProfissionais || [],
-      adicionaisIds: ev.adicionaisIds || [],
-      valorEntrada: ev.valorEntrada ?? 0,
-      formaPagamento: ev.formaPagamento || "",
-      aniversariantes: ev.aniversariantes || [],
-    });
+          // Atualiza status da cobrança se entrada cobre tudo
+          if (formData.valorEntrada >= (formData.valor ?? 0)) {
+            await supabase.from("cobrancas").update({ status: "pago" }).eq("id", cobrancaData.id);
+          } else {
+            await supabase.from("cobrancas").update({ status: "parcial" }).eq("id", cobrancaData.id);
+          }
+        }
 
-    // Carrega os profissionais da equipe se houver
-    if (ev.equipeId) {
-      const equipeEncontrada = equipes.find(e => e.id === ev.equipeId);
-      if (equipeEncontrada) {
-        setEventoEquipeProfissionais(
-          equipeEncontrada.profissionais.map(p => ({
-            id: p.id,
-            nome: p.nome,
-            quantidade: p.quantidade,
-          }))
-        );
+        await fetchServicos();
+        handleCancelForm();
+
+        // Abre modal de pagamentos automaticamente
+        const clienteNome =
+          clientes.find(c => c.id === formData.clienteId)
+            ? `${clientes.find(c => c.id === formData.clienteId)!.nome} ${clientes.find(c => c.id === formData.clienteId)!.sobrenome}`
+            : "";
+        await abrirPagamentos(servicoId, clienteNome);
+
+        toast({ title: "Serviço agendado!", description: "Confira os detalhes de pagamento abaixo." });
       }
-    } else {
-      setEventoEquipeProfissionais(ev.equipeProfissionais ?? []);
+    } catch (err: any) {
+      toast({ title: "Erro ao salvar", description: err.message, variant: "destructive" });
+    } finally {
+      setSubmitting(false);
     }
+  }
 
-    // Carrega as observações e quantidades de adicionais
-    const mapFromEventoObs: Record<string, string> = {};
-    ev.adicionaisObservacoes?.forEach(item => {
-      mapFromEventoObs[item.adicionalId] = item.observacao;
-    });
-    setAdicionaisObservacoesMap(mapFromEventoObs);
+  // ---------------------------------------------------------------------------
+  // Edit
+  // ---------------------------------------------------------------------------
+  async function handleEditServico(id: string) {
+    const s = servicos.find(x => x.id === id);
+    if (!s) return;
 
-    const mapFromEventoQtd: Record<string, number> = {};
-    ev.adicionaisQuantidade?.forEach(item => {
-      mapFromEventoQtd[item.adicionalId] = item.quantidade;
-    });
-    setAdicionaisQuantidadeMap(mapFromEventoQtd);
+    setLoadingPiscinas(true);
+    const { data } = await supabase
+      .from("piscinas")
+      .select("id, client_id, tipo, tamanho, endereco, observacoes")
+      .eq("client_id", s.client_id);
+    setPiscinas(data ?? []);
+    setLoadingPiscinas(false);
 
-    setEditingEventoId(id);
-    setShowForm(true);
-    setSelectedEventoId(null); // ← Fechar detalhes
-    setValorEditadoManualmente(true);
-  };
-
-  const handleCancelForm = () => {
-    setShowForm(false);
-    setEditingEventoId(null);
     setFormData({
-      titulo: "",
-      clienteId: "",
-      clienteNome: "",
-      data: "",
-      horaInicio: "",
-      horaFim: "",
-      tipo: "festa",
-      status: "pendente",
-      observacoes: "",
-      valor: 0,
-      pacoteId: "",
-      convidados: undefined,
-      decoracao: "",
-      equipeId: "",
-      equipeProfissionais: [],
-      adicionaisIds: [],
+      clienteId: s.client_id,
+      piscinaId: s.piscina_id,
+      tipoServico: s.tipo_servico ?? "",
+      dataAgendamento: s.data_agendamento ?? "",
+      horario: s.horario ?? "",
+      status: s.status ?? "agendado",
+      observacoes: s.observacoes ?? "",
+      valor: undefined,
+      dataVencimento: "",
       valorEntrada: undefined,
       formaPagamento: "",
-      aniversariantes: [],
     });
-    setEventoEquipeProfissionais([]);
-    setAdicionaisObservacoesMap({});
-    setAdicionaisQuantidadeMap({});
-    setValorEditadoManualmente(false);
-  };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmado': return 'bg-green-100 text-green-800';
-      case 'pendente': return 'bg-yellow-100 text-yellow-800';
-      case 'cancelado': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
+    setEditingServicoId(id);
+    setSelectedServicoId(null);
+    setPagamentoModal(null);
+    setShowForm(true);
+  }
 
-  const getTipoColor = (tipo: string) => {
-    switch (tipo) {
-      case 'casamento': return 'bg-purple-100 text-purple-800';
-      case 'corporativo': return 'bg-blue-100 text-blue-800';
-      case 'festa': return 'bg-orange-100 text-orange-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const [showAdicionaisPicker, setShowAdicionaisPicker] = useState(false);
-
-  // NOVO: helpers para detalhes
-  const getPacoteById = (id?: string) =>
-    id ? pacotes.find(p => p.id === id) : undefined;
-
-  const getEquipeById = (id?: string) =>
-    id ? equipes.find(e => e.id === id) : undefined;
-
-  const calcularTotalAdicionalEvento = (
-    adicional: (typeof adicionais)[number],
-    evento: Evento
-  ) => {
-    const convidados = evento.convidados ?? 0;
-
-    if (adicional.modelo === "valor_festa") {
-      return adicional.valor;
-    }
-
-    if (adicional.modelo === "valor_unidade") {
-      const qtdItem = evento.adicionaisQuantidade?.find(
-        q => q.adicionalId === adicional.id
-      );
-      const qtd = qtdItem?.quantidade ?? 0;
-      return adicional.valor * qtd;
-    }
-
-    // valor_pessoa
-    return adicional.valor * convidados;
-  };
-
-  const selectedEventoRef = useRef<HTMLDivElement>(null);
-  const showFormRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll quando abre formulário
+  // If navigation provided an editId in location.state (from the calendar), open the form
+  // once services have been loaded so the requested service can be found.
+  // This runs after fetchServicos populated `servicos`.
   useEffect(() => {
-    if (showForm && showFormRef.current) {
-      setTimeout(() => {
-        showFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
+    if (!locationEditId) return;
+    if (!servicos || servicos.length === 0) return;
+    const exists = servicos.some(s => s.id === locationEditId);
+    if (exists) {
+      handleEditServico(locationEditId);
     }
+  }, [locationEditId, servicos]);
+
+  function handleCancelForm() {
+    setShowForm(false);
+    setEditingServicoId(null);
+    setFormData(FORM_INITIAL);
+    setPiscinas([]);
+  }
+
+  function handleInputChange(field: keyof FormData, value: string | number | undefined) {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  const filteredServicos = servicos.filter(s =>
+    (s.cliente_nome ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.tipo_servico ?? "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.status ?? "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const selectedServico = selectedServicoId
+    ? servicos.find(s => s.id === selectedServicoId) ?? null
+    : null;
+
+  const piscinaAtual = piscinas.find(p => p.id === formData.piscinaId);
+
+  function getStatusColor(status: string | null) {
+    switch (status) {
+      case "confirmado": return "bg-green-100 text-green-800";
+      case "agendado":   return "bg-blue-100 text-blue-800";
+      case "concluido":  return "bg-gray-100 text-gray-700";
+      case "cancelado":  return "bg-red-100 text-red-800";
+      default:           return "bg-yellow-100 text-yellow-800";
+    }
+  }
+
+  function getCobrancaStatusColor(status: string | null) {
+    switch (status) {
+      case "pago":     return "bg-green-100 text-green-800";
+      case "parcial":  return "bg-yellow-100 text-yellow-800";
+      case "pendente": return "bg-red-100 text-red-800";
+      default:         return "bg-gray-100 text-gray-700";
+    }
+  }
+
+  function formatMoney(v: number) {
+    return v.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  }
+
+  // calculos do modal
+  const totalPago = pagamentoModal?.pagamentos.reduce((s, p) => s + (p.valor_pago ?? 0), 0) ?? 0;
+  const saldoDevedor = (pagamentoModal?.cobranca?.valor ?? 0) - totalPago;
+  const cobrancaQuitada = !!pagamentoModal?.cobranca && saldoDevedor <= 0.001;
+
+  // auto-scroll
+  useEffect(() => {
+    if (showForm) setTimeout(() => showFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }, [showForm]);
 
-  // Auto-scroll quando seleciona evento
   useEffect(() => {
-    if (selectedEvento && selectedEventoRef.current) {
-      setTimeout(() => {
-        selectedEventoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
-    }
-  }, [selectedEvento]);
+    if (selectedServico) setTimeout(() => selectedRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+  }, [selectedServico]);
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
   return (
     <div className="p-6 bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen">
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-4xl font-bold text-foreground">Serviços</h1>
-        <p className="text-muted-foreground mt-2">
-          Gerencie seus Serviços
-        </p>
+        <p className="text-muted-foreground mt-2">Gerencie os agendamentos de serviços de piscina</p>
       </div>
 
       <div className="flex flex-wrap gap-3 mb-8">
         <Button
           className="bg-blue-600 hover:bg-blue-700 text-white px-6 flex items-center gap-2"
           onClick={() => {
-            if (showForm && !editingEventoId) {
-              handleCancelForm();
-            } else {
-              setShowForm(prev => !prev);
-            }
+            if (showForm && !editingServicoId) handleCancelForm();
+            else { setPagamentoModal(null); setShowForm(prev => !prev); }
           }}
         >
           <Plus size={18} />
-          {showForm ? "Cancelar" : editingEventoId ? "Editar Serviço" : "Agendar Serviço"}
+          {showForm ? "Cancelar" : "Agendar Serviço"}
         </Button>
       </div>
 
-      {!showForm && (
+      {/* Search */}
+      {!showForm && !pagamentoModal && (
         <Card className="mb-6 bg-white border-blue-200">
           <CardContent className="p-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
               <Input
-                placeholder="Pesquisar serviço"
+                placeholder="Pesquisar por cliente, tipo de serviço ou status"
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={e => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
@@ -630,521 +641,176 @@ export default function Eventos() {
         </Card>
       )}
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Formulário de agendamento                                           */}
+      {/* ------------------------------------------------------------------ */}
       {showForm && (
         <div ref={showFormRef}>
           <Card className="mb-8 border-l-4 border-l-blue-600 shadow-lg">
             <CardHeader className="bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200">
               <CardTitle className="text-blue-900">
-                {editingEventoId ? "Editar serviço" : "Agendar serviço"}
+                {editingServicoId ? "Editar serviço" : "Agendar serviço"}
               </CardTitle>
               <p className="text-xs text-blue-700 mt-1">Configure todos os detalhes do serviço</p>
             </CardHeader>
             <CardContent className="pt-6">
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Cliente + Piscina */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="cliente">Cliente: <span className="text-red-500">*</span></Label>
-                    <Select value={formData.clienteId} onValueChange={handleClienteSelect}>
+                    <Label>Cliente: <span className="text-red-500">*</span></Label>
+                    <Select value={formData.clienteId} onValueChange={handleClienteSelect} disabled={loadingClientes}>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione o cliente" />
+                        <SelectValue placeholder={loadingClientes ? "Carregando..." : "Selecione o cliente"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {clientesList.map((cliente) => (
-                          <SelectItem key={cliente.id} value={cliente.id}>
-                            {cliente.nome} {cliente.sobrenome}
-                          </SelectItem>
+                        {clientes.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.nome} {c.sobrenome}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
 
-                {/* mostrar detalhes do cliente selecionado e piscinas */}
-                {selectedClientDetails && (
-                  <div className="p-4 bg-slate-50 rounded border">
-                    <div className="text-sm mb-2 font-medium">Cliente selecionado</div>
-                    <div className="text-sm">{selectedClientDetails.nome} {selectedClientDetails.sobrenome}</div>
-                    <div className="text-sm">{selectedClientDetails.email}</div>
-                    <div className="text-sm">{selectedClientDetails.numero_celular}</div>
-                    <div className="mt-3">
-                      <Label htmlFor="piscinaSelect">Piscina</Label>
-                      {piscinasList.length === 0 ? (
-                        <div className="text-xs text-muted-foreground">Nenhuma piscina cadastrada para este cliente.</div>
-                      ) : piscinasList.length === 1 ? (
-                        <div className="text-sm">{piscinasList[0].tipo} — {piscinasList[0].tamanho}</div>
-                      ) : (
-                        <Select value={selectedPiscinaId || ""} onValueChange={(v) => setSelectedPiscinaId(v || null)}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione a piscina" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {piscinasList.map(p => (
-                              <SelectItem key={p.id} value={p.id}>{p.tipo} — {p.tamanho}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label>
-                      Aniversariantes / Homenageados:{" "}
-                      <span className="text-red-500">*</span>
-                    </Label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleAddAniversariante}
-                    >
-                      Adicionar pessoa
-                    </Button>
-                  </div>
-
-                  {(formData.aniversariantes || []).length === 0 && (
-                    <div className="text-xs text-muted-foreground">
-                      Adicione pelo menos uma pessoa (ex.: aniversariante ou casal de noivos).
-                    </div>
-                  )}
-
-                  <div className="space-y-2">
-                    {(formData.aniversariantes || []).map((a, index) => (
-                      <div
-                        key={index}
-                        className="grid grid-cols-1 md:grid-cols-[2fr_1fr_auto] gap-2 items-center"
-                      >
-                        <div>
-                          <Label className="text-xs" htmlFor={`aniv-nome-${index}`}>
-                            Nome
-                          </Label>
-                          <Input
-                            id={`aniv-nome-${index}`}
-                            value={a.nome || ""}
-                            onChange={e =>
-                              handleAniversarianteChange(index, "nome", e.target.value)
-                            }
-                            placeholder="Ex.: Ana Beatriz"
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs" htmlFor={`aniv-idade-${index}`}>
-                            Idade (opcional)
-                          </Label>
-                          <Input
-                            id={`aniv-idade-${index}`}
-                            type="number"
-                            min={0}
-                            value={a.idade ?? ""}
-                            onChange={e =>
-                              handleAniversarianteChange(index, "idade", e.target.value)
-                            }
-                            placeholder="Ex.: 7"
-                          />
-                        </div>
-                        <div className="flex items-end">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleRemoveAniversariante(index)}
-                          >
-                            Remover
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label>Proposta: <span className="text-red-500">*</span></Label>
+                    <Label>Piscina: <span className="text-red-500">*</span></Label>
                     <Select
-                      value={formData.pacoteId}
-                      onValueChange={handlePacoteSelect}
+                      value={formData.piscinaId}
+                      onValueChange={v => handleInputChange("piscinaId", v)}
+                      disabled={!formData.clienteId || loadingPiscinas}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione a proposta" />
+                        <SelectValue placeholder={
+                          !formData.clienteId ? "Selecione um cliente primeiro"
+                          : loadingPiscinas ? "Carregando piscinas..."
+                          : piscinas.length === 0 ? "Nenhuma piscina cadastrada"
+                          : "Selecione a piscina"
+                        } />
                       </SelectTrigger>
                       <SelectContent>
-                        {pacotes.map(p => (
+                        {piscinas.map(p => (
                           <SelectItem key={p.id} value={p.id}>
-                            {p.nome} ({p.duracaoHoras}h / {p.convidadosBase} convidados)
+                            {p.tamanho}{p.tipo ? ` — ${p.tipo}` : ""}{p.endereco ? ` (${p.endereco})` : ""}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor="data">Data: <span className="text-red-500">*</span></Label>
-                    <Input
-                      id="data"
-                      type="date"
-                      required
-                      value={formData.data}
-                      onChange={(e) => handleInputChange("data", e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="horaInicio">Início: <span className="text-red-500">*</span></Label>
-                      <Input
-                        id="horaInicio"
-                        type="time"
-                        required
-                        value={formData.horaInicio}
-                        onChange={(e) => handleInputChange("horaInicio", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="horaFim">Fim:</Label>
-                      <Input
-                        id="horaFim"
-                        type="time"
-                        value={formData.horaFim}
-                        onChange={(e) => handleInputChange("horaFim", e.target.value)}
-                      />
-                    </div>
+
+                    {piscinaAtual && (
+                      <div className="mt-2 text-xs bg-blue-50 border border-blue-200 rounded px-3 py-2 text-blue-800 space-y-0.5">
+                        {piscinaAtual.tipo && <div><strong>Tipo:</strong> {piscinaAtual.tipo}</div>}
+                        <div><strong>Tamanho:</strong> {piscinaAtual.tamanho}</div>
+                        {piscinaAtual.endereco && <div><strong>Endereço:</strong> {piscinaAtual.endereco}</div>}
+                        {piscinaAtual.observacoes && <div><strong>Obs:</strong> {piscinaAtual.observacoes}</div>}
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {selectedPacote && (diffHorasPacote.hasExtra || diffHorasPacote.hasDeficit) && (
-                  <div className="text-xs bg-amber-50 border border-amber-200 rounded px-3 py-2 text-amber-800 space-y-1">
-                    <div>
-                      Duração selecionada:{" "}
-                      <strong>{diffHorasPacote.duracaoHoras.toFixed(2)}h</strong>{" "}
-                      (proposta: <strong>{selectedPacote.duracaoHoras}h</strong>)
-                    </div>
-
-                    {diffHorasPacote.hasExtra && (
-                      <div>
-                        {diffHorasPacote.extraInt}{" "}
-                        {diffHorasPacote.extraInt === 1 ? "hora extra" : "horas extras"}.
-                      </div>
-                    )}
-
-                    {diffHorasPacote.hasDeficit && (
-                      <div>
-                        {diffHorasPacote.deficitInt}{" "}
-                        {diffHorasPacote.deficitInt === 1
-                          ? "hora a menos que o pacote."
-                          : "horas a menos que o pacote."}
-                      </div>
-                    )}
+                {/* Tipo, Data, Horário */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label>Tipo de serviço: <span className="text-red-500">*</span></Label>
+                    <Input
+                      value={formData.tipoServico}
+                      onChange={e => handleInputChange("tipoServico", e.target.value)}
+                      placeholder="Ex.: Limpeza, Tratamento químico"
+                    />
                   </div>
-                )}
+                  <div>
+                    <Label>Data: <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="date"
+                      value={formData.dataAgendamento}
+                      onChange={e => handleInputChange("dataAgendamento", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <Label>Horário: <span className="text-red-500">*</span></Label>
+                    <Input
+                      type="time"
+                      value={formData.horario}
+                      onChange={e => handleInputChange("horario", e.target.value)}
+                    />
+                  </div>
+                </div>
 
+                {/* Status */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="convidados">
-                      Convidados: <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="convidados"
-                      type="number"
-                      value={formData.convidados ?? ""}
-                      onChange={(e) => handleConvidadosChange(e.target.value)}
-                      placeholder={
-                        selectedPacote
-                          ? `Mínimo ${selectedPacote.convidadosBase}`
-                          : "Quantidade de convidados"
-                      }
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="decoracao">Decoração:</Label>
-                    <Input
-                      id="decoracao"
-                      value={formData.decoracao || ""}
-                      onChange={(e) => handleInputChange("decoracao", e.target.value)}
-                      placeholder="Decoração (ex: Jardim)"
-                    />
+                    <Label>Status:</Label>
+                    <Select value={formData.status} onValueChange={v => handleInputChange("status", v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="agendado">Agendado</SelectItem>
+                        <SelectItem value="confirmado">Confirmado</SelectItem>
+                        <SelectItem value="concluido">Concluído</SelectItem>
+                        <SelectItem value="cancelado">Cancelado</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Equipe:</Label>
-                  <Select
-                    value={formData.equipeId}
-                    onValueChange={handleEquipeSelect}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione a equipe" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {equipes.map(equipe => (
-                        <SelectItem key={equipe.id} value={equipe.id}>
-                          {equipe.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {eventoEquipeProfissionais.length > 0 && (
-                    <div className="mt-2 space-y-2">
-                      {eventoEquipeProfissionais.map(p => (
-                        <div
-                          key={p.id}
-                          className="flex justify-between items-center text-sm border rounded px-3 py-2 bg-muted/60"
-                        >
-                          <span className="font-medium">{p.nome}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">Qtd.</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              value={p.quantidade}
-                              onChange={e =>
-                                handleEquipeProfissionalChange(
-                                  p.id,
-                                  Number(e.target.value) || 0
-                                )
-                              }
-                              className="w-16 h-8 text-sm"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Adicionais:</Label>
-
-                  {adicionais.length === 0 ? (
-                    <div className="text-xs text-muted-foreground">
-                      Nenhum adicional cadastrado. Cadastre em Propostas &gt; Adicionais.
-                    </div>
-                  ) : (
-                    <>
-                      {selecionadosAdicionais.length === 0 ? (
-                        <div className="text-xs text-muted-foreground">
-                          Nenhum adicional selecionado.
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-2 text-xs">
-                          {selecionadosAdicionais.map(a => (
-                            <span
-                              key={a.id}
-                              className="px-2 py-1 rounded-full bg-primary/5 border border-primary/40 text-primary"
-                            >
-                              {a.nome}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="mt-2 text-xs md:text-sm"
-                        onClick={() => setShowAdicionaisPicker(true)}
-                      >
-                        Selecionar adicionais
-                      </Button>
-
-                      {showAdicionaisPicker && (
-                        <div className="mt-3 border rounded-md bg-muted/40">
-                          <div className="px-3 py-2 border-b text-xs text-muted-foreground">
-                            Marque os adicionais desejados, preencha as observações/quantidades e clique em &quot;Aplicar seleção&quot;.
-                          </div>
-
-                          <div className="max-h-64 overflow-y-auto divide-y">
-                            {adicionais.map(a => {
-                              const checked = (formData.adicionaisIds || []).includes(a.id);
-                              const obsValue = adicionaisObservacoesMap[a.id] || "";
-                              const qtdValue = adicionaisQuantidadeMap[a.id] ?? 0;
-                              return (
-                                <div key={a.id} className="px-3 py-2 text-xs md:text-sm">
-                                  <label className="flex items-center justify-between cursor-pointer hover:bg-muted/40 rounded px-1 py-1">
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="checkbox"
-                                        checked={checked}
-                                        onChange={() => handleAdicionalToggle(a.id)}
-                                        className="h-4 w-4"
-                                      />
-                                      <div>
-                                        <div className="font-medium text-sm">{a.nome}</div>
-                                        <div className="text-muted-foreground text-xs">
-                                          {a.modelo === "valor_pessoa"
-                                            ? "Valor por pessoa"
-                                            : a.modelo === "valor_unidade"
-                                            ? "Valor por unidade"
-                                            : "Valor por festa"}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="text-xs font-medium whitespace-nowrap ml-2">
-                                      R$ {a.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                                    </div>
-                                  </label>
-
-                                  {checked && a.modelo === "valor_unidade" && (
-                                    <div className="mt-2 pl-6 flex items-center gap-2">
-                                      <span className="text-xs text-muted-foreground">Quantidade:</span>
-                                      <Input
-                                        type="number"
-                                        min={0}
-                                        value={qtdValue === 0 ? "" : qtdValue}
-                                        onChange={e =>
-                                          handleAdicionalQuantidadeChange(a.id, e.target.value)
-                                        }
-                                        className="w-24 h-8 text-xs"
-                                        placeholder="Qtd."
-                                      />
-                                    </div>
-                                  )}
-
-                                  {checked && a.observacao && (
-                                    <div className="mt-2 pl-6">
-                                      <Textarea
-                                        rows={2}
-                                        placeholder="Observação para este adicional"
-                                        value={obsValue}
-                                        onChange={e =>
-                                          handleAdicionalObservacaoChange(a.id, e.target.value)
-                                        }
-                                        className="text-xs md:text-sm"
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          <div className="flex justify-end gap-2 px-3 py-2 border-t">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setShowAdicionaisPicker(false)}
-                            >
-                              Cancelar
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="bg-primary hover:bg-primary-hover text-primary-foreground"
-                              onClick={() => setShowAdicionaisPicker(false)}
-                            >
-                              Aplicar seleção
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="valorEvento">Valor do evento (R$):</Label>
-                    <Input
-                      id="valorEvento"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={formData.valor ?? 0}
-                      onChange={e => {
-                        setValorEditadoManualmente(true);
-                        handleInputChange(
-                          "valor",
-                          e.target.value === "" ? 0 : parseFloat(e.target.value) || 0
-                        );
-                      }}
-                      placeholder={
-                        valorCalculado
-                          ? `Sugestão: R$ ${valorCalculado.toLocaleString("pt-BR", {
-                              minimumFractionDigits: 2,
-                            })}`
-                          : "Informe o valor do evento"
-                      }
-                    />
-
-                    {selectedPacote && hasDiffValor && (
-                      <div className="text-[11px] mt-1 px-3 py-2 rounded border bg-amber-50 border-amber-200 text-amber-800">
-                        O valor sugerido para este evento é{" "}
-                        <strong>
-                          R$ {valorCalculado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </strong>
-                        , mas você definiu{" "}
-                        <strong>
-                          R$ {valorDigitado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </strong>
-                        . Diferença de{" "}
-                        <strong>
-                          R$ {Math.abs(diffValor).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </strong>
-                        .{" "}
-                        {diffValor < 0
-                          ? "Verifique se todos os custos (ex.: convidados extras e adicionais) estão contemplados."
-                          : "Lembre-se de alinhar este valor com o cliente e registrar as condições em forma de pagamento/contrato."}
+                {/* Financeiro — só na criação */}
+                {!editingServicoId && (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <Label>Valor do serviço (R$): <span className="text-red-500">*</span></Label>
+                        <Input
+                          type="number" min={0} step="0.01"
+                          value={formData.valor ?? ""}
+                          onChange={e => handleInputChange("valor", e.target.value === "" ? undefined : parseFloat(e.target.value))}
+                          placeholder="Ex.: 250,00"
+                        />
                       </div>
-                    )}
-                  </div>
+                      <div>
+                        <Label>Vencimento da cobrança:</Label>
+                        <Input
+                          type="date"
+                          value={formData.dataVencimento}
+                          onChange={e => handleInputChange("dataVencimento", e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Se vazio, usa a data do serviço.</p>
+                      </div>
+                      <div>
+                        <Label>Entrada (R$):</Label>
+                        <Input
+                          type="number" min={0} step="0.01"
+                          value={formData.valorEntrada ?? ""}
+                          onChange={e => handleInputChange("valorEntrada", e.target.value === "" ? undefined : parseFloat(e.target.value))}
+                          placeholder="Opcional"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Forma de pagamento: <span className="text-red-500">*</span></Label>
+                        <Input
+                          value={formData.formaPagamento}
+                          onChange={e => handleInputChange("formaPagamento", e.target.value)}
+                          placeholder="Ex.: Pix, Cartão, Dinheiro"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="valorEntrada">Entrada (R$):</Label>
-                    <Input
-                      id="valorEntrada"
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      value={formData.valorEntrada ?? ""}
-                      onChange={e =>
-                        handleInputChange(
-                          "valorEntrada",
-                          e.target.value === "" ? undefined : parseFloat(e.target.value) || 0
-                        )
-                      }
-                      placeholder="Valor da entrada"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="formaPagamento">
-                      Formas de pagamento: <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      id="formaPagamento"
-                      value={formData.formaPagamento || ""}
-                      onChange={e => handleInputChange("formaPagamento", e.target.value)}
-                      placeholder="Ex.: Pix"
-                    />
-                  </div>
-                </div>
-
+                {/* Observações */}
                 <div>
-                  <Label htmlFor="observacoes">Observações:</Label>
+                  <Label>Observações:</Label>
                   <Textarea
-                    id="observacoes"
                     value={formData.observacoes}
-                    onChange={(e) => handleInputChange("observacoes", e.target.value)}
-                    placeholder="Informações adicionais sobre o evento"
+                    onChange={e => handleInputChange("observacoes", e.target.value)}
+                    placeholder="Informações adicionais sobre o serviço"
                   />
                 </div>
 
                 <div className="flex justify-center pt-4 gap-2">
-                  <Button
-                    type="submit"
-                    className="bg-primary hover:bg-primary-hover text-primary-foreground px-8"
-                  >
-                    {editingEventoId ? "Salvar alterações" : "Agendar"}
+                  <Button type="submit" disabled={submitting} className="bg-primary hover:bg-primary-hover text-primary-foreground px-8">
+                    {submitting ? "Salvando..." : editingServicoId ? "Salvar alterações" : "Agendar"}
                   </Button>
-                  {editingEventoId && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCancelForm}
-                    >
-                      Cancelar
-                    </Button>
+                  {editingServicoId && (
+                    <Button type="button" variant="outline" onClick={handleCancelForm}>Cancelar</Button>
                   )}
                 </div>
               </form>
@@ -1153,19 +819,213 @@ export default function Eventos() {
         </div>
       )}
 
-      {!showForm && (
+      {/* ------------------------------------------------------------------ */}
+      {/* Modal de Pagamentos                                                 */}
+      {/* ------------------------------------------------------------------ */}
+      {pagamentoModal && (
+        <div ref={modalRef} className="mb-8">
+          <Card className="border-l-4 border-l-emerald-500 shadow-lg">
+            <CardHeader className="bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-emerald-900 flex items-center gap-2">
+                    <DollarSign size={20} />
+                    Pagamentos — {pagamentoModal.clienteNome}
+                  </CardTitle>
+                  <p className="text-xs text-emerald-700 mt-1">Gerencie os pagamentos desta cobrança</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setPagamentoModal(null)}
+                  className="text-slate-500 hover:text-slate-800"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+            </CardHeader>
+
+            <CardContent className="pt-6 space-y-6">
+              {pagamentoModal.loading ? (
+                <div className="text-center text-muted-foreground py-8">Carregando...</div>
+              ) : !pagamentoModal.cobranca ? (
+                <div className="text-center text-muted-foreground py-8">Cobrança não encontrada.</div>
+              ) : (
+                <>
+                  {/* Resumo financeiro */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="rounded-lg border bg-slate-50 p-4 text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Valor total</p>
+                      <p className="text-2xl font-bold text-slate-800">
+                        R$ {formatMoney(pagamentoModal.cobranca.valor)}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border bg-green-50 p-4 text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total pago</p>
+                      <p className="text-2xl font-bold text-green-700">
+                        R$ {formatMoney(totalPago)}
+                      </p>
+                    </div>
+                    <div className={`rounded-lg border p-4 text-center ${cobrancaQuitada ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Saldo devedor</p>
+                      <p className={`text-2xl font-bold ${cobrancaQuitada ? "text-green-700" : "text-red-700"}`}>
+                        R$ {formatMoney(Math.max(0, saldoDevedor))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Status da cobrança + vencimento */}
+                  <div className="flex items-center gap-3 text-sm">
+                    <Badge className={getCobrancaStatusColor(pagamentoModal.cobranca.status)}>
+                      {pagamentoModal.cobranca.status ?? "pendente"}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      Vencimento:{" "}
+                      {pagamentoModal.cobranca.data_vencimento
+                        ? format(parseISO(pagamentoModal.cobranca.data_vencimento), "dd/MM/yyyy", { locale: ptBR })
+                        : "—"}
+                    </span>
+                  </div>
+
+                  {/* Histórico de pagamentos */}
+                  <div>
+                    <h3 className="text-sm font-semibold flex items-center gap-2 text-slate-700 mb-3">
+                      <History size={16} />
+                      Histórico de pagamentos
+                    </h3>
+
+                    {pagamentoModal.pagamentos.length === 0 ? (
+                      <div className="text-sm text-muted-foreground bg-slate-50 rounded-lg border px-4 py-6 text-center">
+                        Nenhum pagamento registrado ainda.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {pagamentoModal.pagamentos.map((p, idx) => (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between rounded-lg border bg-white px-4 py-3 text-sm"
+                          >
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs text-muted-foreground w-5 text-right">{idx + 1}.</span>
+                              <div>
+                                <div className="font-medium text-green-700">
+                                  R$ {formatMoney(p.valor_pago ?? 0)}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {p.data_pagamento
+                                    ? format(parseISO(p.data_pagamento), "dd/MM/yyyy", { locale: ptBR })
+                                    : "—"}
+                                  {p.forma_pagamento ? ` · ${p.forma_pagamento}` : ""}
+                                  {p.observacoes ? ` · ${p.observacoes}` : ""}
+                                </div>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2"
+                              onClick={() => handleRemoverPagamento(p.id)}
+                            >
+                              <X size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Registrar novo pagamento */}
+                  {!cobrancaQuitada && (
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 space-y-4">
+                      <h3 className="text-sm font-semibold flex items-center gap-2 text-emerald-800">
+                        <CreditCard size={16} />
+                        Registrar pagamento
+                      </h3>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <Label className="text-xs">Valor (R$): <span className="text-red-500">*</span></Label>
+                          <Input
+                            type="number" min={0} step="0.01"
+                            value={novoPagamentoForm.valorPago ?? ""}
+                            onChange={e => setNovoPagamentoForm(prev => ({
+                              ...prev,
+                              valorPago: e.target.value === "" ? undefined : parseFloat(e.target.value),
+                            }))}
+                            placeholder={`Máx: R$ ${formatMoney(Math.max(0, saldoDevedor))}`}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Forma de pagamento: <span className="text-red-500">*</span></Label>
+                          <Input
+                            value={novoPagamentoForm.formaPagamento}
+                            onChange={e => setNovoPagamentoForm(prev => ({ ...prev, formaPagamento: e.target.value }))}
+                            placeholder="Ex.: Pix, Dinheiro"
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Data do pagamento:</Label>
+                          <Input
+                            type="date"
+                            value={novoPagamentoForm.dataPagamento}
+                            onChange={e => setNovoPagamentoForm(prev => ({ ...prev, dataPagamento: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Observações:</Label>
+                          <Input
+                            value={novoPagamentoForm.observacoes}
+                            onChange={e => setNovoPagamentoForm(prev => ({ ...prev, observacoes: e.target.value }))}
+                            placeholder="Opcional"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Button
+                          type="button"
+                          disabled={salvandoPagamento}
+                          onClick={handleRegistrarPagamento}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                        >
+                          {salvandoPagamento ? "Salvando..." : "Registrar pagamento"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {cobrancaQuitada && (
+                    <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800 flex items-center gap-2">
+                      <CheckCircle2 size={16} />
+                      Cobrança quitada — todos os pagamentos foram registrados.
+                    </div>
+                  )}
+
+                  <div className="flex justify-end pt-2">
+                    <Button variant="outline" onClick={() => setPagamentoModal(null)}>
+                      Fechar
+                    </Button>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Lista de serviços                                                   */}
+      {/* ------------------------------------------------------------------ */}
+      {!showForm && !pagamentoModal && (
         <div className="space-y-4">
-          {filteredEventos.length === 0 ? (
+          {filteredServicos.length === 0 ? (
             <Card className="bg-white border-blue-200">
               <CardContent className="p-12 text-center">
                 <div className="text-muted-foreground">
-                  {searchTerm ? "Nenhum evento encontrado com os critérios de busca." : "Nenhum serviço agendado ainda."}
+                  {searchTerm ? "Nenhum serviço encontrado." : "Nenhum serviço agendado ainda."}
                 </div>
                 {!searchTerm && (
-                  <Button 
-                    className="mt-4 bg-primary hover:bg-primary-hover text-primary-foreground"
-                    onClick={() => setShowForm(true)}
-                  >
+                  <Button className="mt-4 bg-primary hover:bg-primary-hover text-primary-foreground" onClick={() => setShowForm(true)}>
                     <Plus size={16} className="mr-2" />
                     Agendar primeiro serviço
                   </Button>
@@ -1174,111 +1034,86 @@ export default function Eventos() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {filteredEventos.map((evento) => (
-                <Card 
-                  key={evento.id} 
+              {filteredServicos.map(servico => (
+                <Card
+                  key={servico.id}
                   className="bg-white border-blue-200 hover:shadow-lg hover:border-blue-400 transition-all cursor-pointer"
-                  onClick={() => setSelectedEventoId(evento.id)}
+                  onClick={() => { setSelectedServicoId(servico.id); setPagamentoModal(null); fetchCobrancaDoServico(servico.id); }}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-4">
-                      {/* Coluna Principal */}
                       <div className="flex-1 space-y-3">
-                        {/* Título e Status */}
                         <div className="flex items-center gap-3 flex-wrap">
-                          <h3 className="font-bold text-lg text-blue-900">{evento.titulo}</h3>
-                          <Badge className={getTipoColor(evento.tipo)} variant="outline">
-                            {evento.tipo}
-                          </Badge>
-                          <Badge className={getStatusColor(evento.status)} variant="outline">
-                            {evento.status}
+                          <h3 className="font-bold text-lg text-blue-900">{servico.cliente_nome}</h3>
+                          <Badge className={getStatusColor(servico.status)} variant="outline">
+                            {servico.status ?? "pendente"}
                           </Badge>
                         </div>
 
-                        {/* Grid de informações principais */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                           <div className="flex items-center gap-2 bg-slate-50 rounded px-3 py-2">
                             <Calendar size={16} className="text-blue-600 flex-shrink-0" />
                             <span className="text-slate-700">
-                              {format(parseISO(evento.data), "dd/MM/yyyy", { locale: ptBR })}
+                              {servico.data_agendamento
+                                ? format(parseISO(servico.data_agendamento), "dd/MM/yyyy", { locale: ptBR })
+                                : "—"}
                             </span>
                           </div>
-
                           <div className="flex items-center gap-2 bg-slate-50 rounded px-3 py-2">
                             <Clock size={16} className="text-blue-600 flex-shrink-0" />
-                            <span className="text-slate-700">
-                              {evento.horaInicio}{evento.horaFim ? ` - ${evento.horaFim}` : ""}
-                            </span>
+                            <span className="text-slate-700">{servico.horario ?? "—"}</span>
                           </div>
-
                           <div className="flex items-center gap-2 bg-slate-50 rounded px-3 py-2">
-                            <Users size={16} className="text-blue-600 flex-shrink-0" />
-                            <span className="text-slate-700">{evento.convidados} convidados</span>
+                            <Waves size={16} className="text-blue-600 flex-shrink-0" />
+                            <span className="text-slate-700">{servico.piscina_tamanho ?? "—"}</span>
                           </div>
-
-                          <div className="flex items-center gap-2 bg-blue-50 rounded px-3 py-2 border border-blue-200">
-                            <span className="text-blue-600 font-bold">
-                              R$ {evento.valor?.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) || "0"}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Cliente e Decoração */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 bg-slate-50 rounded px-3 py-2">
                             <MapPin size={16} className="text-blue-600 flex-shrink-0" />
-                            <div>
-                              <div className="text-xs text-slate-500 font-semibold">Cliente</div>
-                              <div className="text-slate-700 font-medium">{evento.clienteNome}</div>
-                            </div>
+                            <span className="text-slate-700">{servico.tipo_servico ?? "—"}</span>
                           </div>
-
-                          {evento.decoracao && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-slate-500 font-semibold">Decoração:</span>
-                              <span className="text-slate-700 bg-orange-50 px-2 py-1 rounded text-xs font-medium">
-                                {evento.decoracao}
-                              </span>
-                            </div>
-                          )}
                         </div>
 
-                        {/* Observações */}
-                        {evento.observacoes && (
-                          <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
-                            <span className="font-semibold">📝 Obs:</span> {evento.observacoes.substring(0, 100)}
-                            {evento.observacoes.length > 100 ? "..." : ""}
+                        {servico.observacoes && (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+                            <span className="font-semibold">📝 Obs:</span>{" "}
+                            {servico.observacoes.substring(0, 100)}
+                            {servico.observacoes.length > 100 ? "..." : ""}
                           </div>
                         )}
                       </div>
 
-                      {/* Coluna de Ações */}
                       <div className="flex flex-col gap-2 ml-2">
-                        {evento.status === "pendente" && (
+                        {servico.status === "agendado" && (
                           <Button
                             size="sm"
                             className="bg-green-600 hover:bg-green-700 text-white text-xs px-3 whitespace-nowrap"
-                            onClick={(e) => {
+                            onClick={async e => {
                               e.stopPropagation();
-                              updateEvento(evento.id, { status: "confirmado" });
+                              await supabase.from("servicos").update({ status: "confirmado" }).eq("id", servico.id);
+                              fetchServicos();
                             }}
                           >
                             <CheckCircle2 size={14} className="mr-1" />
                             Confirmar
                           </Button>
                         )}
-
                         <Button
                           size="sm"
                           variant="outline"
                           className="border-blue-300 text-blue-700 hover:bg-blue-50 text-xs px-3"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedEventoId(evento.id);
-                          }}
+                          onClick={e => { e.stopPropagation(); setSelectedServicoId(servico.id); setPagamentoModal(null); fetchCobrancaDoServico(servico.id); }}
                         >
                           <Edit size={14} className="mr-1" />
                           Detalhes
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs px-3"
+                          onClick={e => { e.stopPropagation(); setSelectedServicoId(null); abrirPagamentos(servico.id, servico.cliente_nome ?? ""); }}
+                        >
+                          <DollarSign size={14} className="mr-1" />
+                          Pagamentos
                         </Button>
                       </div>
                     </div>
@@ -1290,311 +1125,118 @@ export default function Eventos() {
         </div>
       )}
 
-      {selectedEvento && (
-        <div ref={selectedEventoRef}>
+      {/* ------------------------------------------------------------------ */}
+      {/* Detalhes do serviço                                                 */}
+      {/* ------------------------------------------------------------------ */}
+      {selectedServico && !pagamentoModal && (
+        <div ref={selectedRef}>
           <section className="mt-6">
             <Card className="border-l-4 border-l-blue-600 shadow-lg">
               <CardHeader className="bg-gradient-to-r from-blue-50 to-white border-b border-blue-200">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle className="text-xl flex items-center gap-3">
-                      <span>{selectedEvento.titulo}</span>
-                      <Badge className={getStatusColor(selectedEvento.status)}>
-                        {selectedEvento.status}
-                      </Badge>
-                      <Badge className={getTipoColor(selectedEvento.tipo)}>
-                        {selectedEvento.tipo}
+                      <span>{selectedServico.cliente_nome}</span>
+                      <Badge className={getStatusColor(selectedServico.status)}>
+                        {selectedServico.status ?? "pendente"}
                       </Badge>
                     </CardTitle>
                     <p className="text-xs text-muted-foreground mt-1 flex items-center gap-2">
                       <Calendar size={14} />
-                      {format(parseISO(selectedEvento.data), "dd/MM/yyyy", { locale: ptBR })} •{" "}
+                      {selectedServico.data_agendamento
+                        ? format(parseISO(selectedServico.data_agendamento), "dd/MM/yyyy", { locale: ptBR })
+                        : "—"}
+                      {" • "}
                       <Clock size={14} />
-                      {selectedEvento.horaInicio}
-                      {selectedEvento.horaFim && ` - ${selectedEvento.horaFim}`} •{" "}
-                      <MapPin size={14} />
-                      {selectedEvento.clienteNome}
+                      {selectedServico.horario ?? "—"}
                     </p>
-                  </div>
-                  <div className="text-right text-xs text-muted-foreground">
-                    <div className="font-medium">Valor total</div>
-                    <div className="text-lg font-semibold text-foreground">
-                      R$ {selectedEvento.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </div>
-                    {selectedEvento.valorEntrada !== undefined && (
-                      <div className="mt-1 space-y-0.5">
-                        <div>
-                          Entrada:{" "}
-                          <span className="font-medium">
-                            R$ {(selectedEvento.valorEntrada || 0).toLocaleString("pt-BR", {
-                              minimumFractionDigits: 2,
-                            })}
-                          </span>
-                        </div>
-                        <div>
-                          Saldo:{" "}
-                          <span className="font-medium">
-                            R$ {(
-                              selectedEvento.valor - (selectedEvento.valorEntrada || 0)
-                            ).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                          </span>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent className="space-y-6 pt-4 text-sm">
-                {/* Grid de 2 colunas principais */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Coluna esquerda */}
-                  <div className="space-y-4">
-                    {/* Cliente / Proposta */}
-                    <div className="rounded-lg border bg-slate-50/60 p-3 space-y-2">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        Informações principais
-                      </h3>
-                      <div>
-                        <span className="font-medium text-foreground">Cliente: </span>
-                        {selectedEvento.clienteNome}
-                      </div>
-                      {(() => {
-                        const pacote = getPacoteById(selectedEvento.pacoteId);
-                        if (!pacote) return null;
-                        return (
-                          <div className="mt-1">
-                            <span className="font-medium text-foreground">Proposta: </span>
-                            {pacote.nome}
-                            <div className="text-xs text-muted-foreground mt-1 space-y-0.5 ml-1">
-                              <div>• Duração: {pacote.duracaoHoras}h</div>
-                              <div>• Convidados base: {pacote.convidadosBase}</div>
-                              <div>
-                                • Valor base: R$ {pacote.valorBase.toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 2,
-                                })}
-                              </div>
-                              <div>
-                                • Valor por pessoa: R$ {pacote.valorPorPessoa.toLocaleString("pt-BR", {
-                                  minimumFractionDigits: 2,
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                      {selectedEvento.convidados !== undefined && (
-                        <div className="mt-1">
-                          <span className="font-medium text-foreground">Convidados: </span>
-                          {selectedEvento.convidados}
-                        </div>
-                      )}
-                      {selectedEvento.decoracao && (
-                        <div>
-                          <span className="font-medium text-foreground">Decoração: </span>
-                          {selectedEvento.decoracao}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Aniversariantes */}
-                    {selectedEvento.aniversariantes &&
-                      selectedEvento.aniversariantes.length > 0 && (
-                        <div className="rounded-lg border bg-slate-50/60 p-3">
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
-                            Aniversariantes / Homenageados
-                          </h3>
-                          <ul className="space-y-1 text-sm">
-                            {selectedEvento.aniversariantes.map((a, idx) => (
-                              <li
-                                key={idx}
-                                className="flex items-center justify-between border rounded px-2 py-1 bg-white/70"
-                              >
-                                <span className="font-medium">{a.nome}</span>
-                                {a.idade !== undefined && (
-                                  <span className="text-xs text-muted-foreground">
-                                    {a.idade} anos
-                                  </span>
-                                )}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                  <div className="rounded-lg border bg-slate-50/60 p-3 space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Serviço</h3>
+                    <div><span className="font-medium">Tipo:</span> {selectedServico.tipo_servico ?? "—"}</div>
+                    <div><span className="font-medium">Piscina:</span> {selectedServico.piscina_tamanho ?? "—"}</div>
+                    {selectedServico.observacoes && (
+                      <div><span className="font-medium">Observações:</span> {selectedServico.observacoes}</div>
+                    )}
                   </div>
 
-                  {/* Coluna direita */}
-                  <div className="space-y-4">
-                    {/* Equipe */}
-                    {(() => {
-                      const equipe = getEquipeById(selectedEvento.equipeId);
-                      if (!equipe && !selectedEvento.equipeProfissionais?.length) return null;
-
-                      return (
-                        <div className="rounded-lg border bg-slate-50/60 p-3 space-y-2">
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Equipe
-                          </h3>
-                          {equipe && (
-                            <div>
-                              <span className="font-medium text-foreground">Equipe principal: </span>
-                              {equipe.nome}
-                            </div>
-                          )}
-                          {selectedEvento.equipeProfissionais &&
-                            selectedEvento.equipeProfissionais.length > 0 && (
-                              <div className="mt-1">
-                                <span className="font-medium text-foreground">
-                                  Profissionais:
-                                </span>
-                                <ul className="list-disc list-inside mt-1 space-y-1 text-xs">
-                                  {selectedEvento.equipeProfissionais.map((p) => (
-                                    <li key={p.id}>
-                                      {p.nome}{" "}
-                                      <span className="text-muted-foreground">
-                                        (Qtd.: {p.quantidade})
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
+                  <div className="rounded-lg border bg-slate-50/60 p-3 space-y-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Financeiro</h3>
+                    {selectedCobranca ? (
+                      <>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">Valor total:</span>
+                          <span className="text-lg font-bold text-slate-800">
+                            R$ {selectedCobranca.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
-                      );
-                    })()}
-
-                    {/* Adicionais */}
-                    {selectedEvento.adicionaisIds &&
-                      selectedEvento.adicionaisIds.length > 0 && (
-                        <div className="rounded-lg border bg-slate-50/60 p-3 space-y-2">
-                          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                            Adicionais contratados
-                          </h3>
-                          <ul className="space-y-2 text-xs">
-                            {selectedEvento.adicionaisIds.map((adicionalId) => {
-                              const adicional = adicionais.find((a) => a.id === adicionalId);
-                              if (!adicional) return null;
-
-                              const obsItem = selectedEvento.adicionaisObservacoes?.find(
-                                (o) => o.adicionalId === adicionalId
-                              );
-                              const qtdItem = selectedEvento.adicionaisQuantidade?.find(
-                                (q) => q.adicionalId === adicionalId
-                              );
-                              const totalAdicional = calcularTotalAdicionalEvento(
-                                adicional,
-                                selectedEvento
-                              );
-
-                              const modeloLabel =
-                                adicional.modelo === "valor_pessoa"
-                                  ? "por pessoa"
-                                  : adicional.modelo === "valor_unidade"
-                                  ? "por unidade"
-                                  : "por festa";
-
-                              return (
-                                <li
-                                  key={adicionalId}
-                                  className="rounded border bg-white/80 px-2 py-1.5"
-                                >
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <span className="font-medium">{adicional.nome}</span>{" "}
-                                      <span className="text-muted-foreground">
-                                        ({modeloLabel})
-                                      </span>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      R$ {totalAdicional.toLocaleString("pt-BR", {
-                                        minimumFractionDigits: 2,
-                                      })}
-                                    </div>
-                                  </div>
-                                  <div className="text-[11px] text-muted-foreground mt-0.5">
-                                    Valor base: R$ {adicional.valor.toLocaleString("pt-BR", {
-                                      minimumFractionDigits: 2,
-                                    })}
-                                    {qtdItem && qtdItem.quantidade > 0 && (
-                                      <> • Qtd.: {qtdItem.quantidade}</>
-                                    )}
-                                  </div>
-                                  {obsItem?.observacao && (
-                                    <div className="text-[11px] text-muted-foreground mt-0.5">
-                                      Obs.: {obsItem.observacao}
-                                    </div>
-                                  )}
-                                </li>
-                              );
-                            })}
-                          </ul>
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">Vencimento:</span>
+                          <span>
+                            {selectedCobranca.data_vencimento
+                              ? format(parseISO(selectedCobranca.data_vencimento), "dd/MM/yyyy", { locale: ptBR })
+                              : "—"}
+                          </span>
                         </div>
-                      )}
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">Status do pagamento:</span>
+                          <Badge className={getCobrancaStatusColor(selectedCobranca.status)}>
+                            {selectedCobranca.status ?? "pendente"}
+                          </Badge>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="text-muted-foreground text-xs">Carregando dados financeiros...</div>
+                    )}
                   </div>
                 </div>
 
-                {/* Pagamento e Observações */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {selectedEvento.formaPagamento && (
-                    <div className="rounded-lg border bg-slate-50/60 p-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                        Pagamento
-                      </h3>
-                      <p className="text-sm">{selectedEvento.formaPagamento}</p>
-                    </div>
-                  )}
-
-                  {selectedEvento.observacoes && (
-                    <div className="rounded-lg border bg-slate-50/60 p-3">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">
-                        Observações gerais
-                      </h3>
-                      <p className="text-sm whitespace-pre-line">
-                        {selectedEvento.observacoes}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Botões */}
                 <div className="mt-2 flex flex-wrap gap-2 justify-end">
+                  <Button type="button" variant="outline" onClick={() => setSelectedServicoId(null)}>
+                    Voltar
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setSelectedEventoId(null)}
+                    className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                    onClick={() => { setSelectedServicoId(null); abrirPagamentos(selectedServico.id, selectedServico.cliente_nome ?? ""); }}
                   >
-                    Voltar
+                    <DollarSign size={16} className="mr-1" />
+                    Ver pagamentos
                   </Button>
-
                   <Button
                     type="button"
                     className="bg-blue-600 hover:bg-blue-700 text-white"
-                    onClick={() => {
-                      handleEditEvento(selectedEvento.id);
-                    }}
+                    onClick={() => handleEditServico(selectedServico.id)}
                   >
                     Editar
                   </Button>
-
-                  {selectedEvento.status === "pendente" && (
+                  {selectedServico.status === "agendado" && (
                     <Button
                       type="button"
                       className="bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => {
-                        updateEvento(selectedEvento.id, { status: "confirmado" });
+                      onClick={async () => {
+                        await supabase.from("servicos").update({ status: "confirmado" }).eq("id", selectedServico.id);
+                        await fetchServicos();
+                        setSelectedServicoId(null);
                       }}
                     >
                       <CheckCircle2 size={16} className="mr-1" />
-                      Confirmar festa
+                      Confirmar serviço
                     </Button>
                   )}
-
                   <Button
                     type="button"
                     className="bg-red-600 hover:bg-red-700 text-white"
-                    onClick={() => {
-                      removeEvento(selectedEvento.id);
-                      setSelectedEventoId(null);
+                    onClick={async () => {
+                      await supabase.from("servicos").delete().eq("id", selectedServico.id);
+                      await fetchServicos();
+                      setSelectedServicoId(null);
                     }}
                   >
                     Remover

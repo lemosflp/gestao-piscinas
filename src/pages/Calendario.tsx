@@ -412,19 +412,20 @@ END:VEVENT
                         {EventosDia.map((evento) => (
                           <div
                             key={evento.id}
-                            className={`text-[10px] sm:text-xs px-2 py-1 rounded font-semibold text-center truncate ${getTipoColor(
-                              evento.tipo
-                            )}`}
-                            title={`${evento.titulo ?? ""} - ${
-                              evento.horaInicio ?? ""
-                            }`}
-                          >
-                            <span className="mr-1">{evento.horaInicio ?? "--:--"}</span>
-                            <span className="hidden sm:inline truncate">
-                              {evento.titulo ?? "Evento"}
-                            </span>
-                          </div>
-                        ))}
+                                                    onClick={() => navigate('/Eventos', { state: { showForm: true, editId: evento.id } })}
+                                                    className={`cursor-pointer text-[10px] sm:text-xs px-2 py-1 rounded font-semibold text-center truncate ${getTipoColor(
+                                                      evento.tipo
+                                                    )}`}
+                                                    title={`${evento.titulo ?? ""} - ${
+                                                      evento.horaInicio ?? ""
+                                                    }`}
+                                                  >
+                                                    <span className="mr-1">{evento.horaInicio ?? "--:--"}</span>
+                                                    <span className="hidden sm:inline truncate">
+                                                      {evento.titulo ?? "Evento"}
+                                                    </span>
+                                                  </div>
+                                                ))}
                       </div>
                     </div>
                   );
@@ -449,7 +450,8 @@ END:VEVENT
                     .map((ev) => (
                       <div
                         key={ev.id}
-                        className="flex items-center gap-4 p-3 border border-blue-200 rounded-lg hover:shadow-md hover:border-blue-400 bg-white transition-all"
+                        onClick={() => navigate('/eventos', { state: { showForm: true, editId: ev.id } })}
+                        className="cursor-pointer flex items-center gap-4 p-3 border border-blue-200 rounded-lg hover:shadow-md hover:border-blue-400 bg-white transition-all"
                       >
                         <div
                           className={`w-4 h-4 rounded-full flex-shrink-0 ${getTipoColor(

@@ -149,15 +149,7 @@ export default function Clientes() {
       return;
     }
 
-    // valida telefone fixo (opcional)
-    // if (formData.numeroTelefone && !validarTelefone(formData.numeroTelefone)) {
-    //   toast({
-    //     title: "Telefone inválido",
-    //     description: "Informe um telefone nos formatos 55 51 3333-4444 ou 51 3333-4444 (com ou sem espaços/hífens).",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
+
 
     // valida piscina (se preenchida)
     if (formData.piscinaTamanho && formData.piscinaTamanho.trim().length === 0) {

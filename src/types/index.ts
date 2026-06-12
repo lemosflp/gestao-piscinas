@@ -1,89 +1,84 @@
+// Tipos usados nas telas atuais: Clientes, Piscinas, Serviços, Cobranças, Pagamentos, Calendário
+
 export interface Cliente {
-  id: string;              // uuid (public.clientes.id)
+  id: string;               // uuid (clientes.id)
   nome: string;
-  sobrenome: string;
-  cpf: string;             // varchar(14)
-  sexo: 'M' | 'F' | 'Outro';
-  dataNascimento: string;  // date -> string ISO yyyy-MM-dd
-  numeroCelular: string;
-  numeroTelefone?: string;
-  email: string;
-  estado: string;
-  cidade: string;
-  endereco: string;
-  complemento?: string;
-  userId: string;          // uuid (public.clientes.user_id -> auth.users.id)
-  createdAt: string;       // timestamptz (public.clientes.created_at)
-}
-
-// Evento principal (public.Eventos) + campos agregados das tabelas
-// evento_aniversariantes, evento_adicionais, evento_adicionais_observacoes,
-// evento_adicionais_quantidade, evento_equipe_profissionais.
-export interface Evento {
-  id: string;              // uuid (public.Eventos.id)
-  titulo: string;
-  clienteId: string;       // uuid (public.Eventos.client_id)
-  clienteNome: string;
-  data: string;            // date -> string yyyy-MM-dd
-  horaInicio: string;      // time -> string HH:mm
-  horaFim?: string;        // time -> string HH:mm
-  tipo: 'festa' | 'casamento' | 'corporativo' | 'outro';
-  status: 'confirmado' | 'pendente' | 'cancelado';
+  sobrenome?: string;
+  numero_celular?: string;  // coluna: numero_celular
+  numero_telefone?: string;
+  email?: string;
+  endereco?: string;
+  cidade?: string;
+  estado?: string;
   observacoes?: string;
-  valor: number;           // numeric(12,2)
-  pacoteId?: string;       // uuid (public.Eventos.pacote_id)
-  convidados?: number;     // integer
-  decoracao?: string;
-  equipeId?: string;       // uuid (public.Eventos.equipe_id)
-  valorEntrada?: number;   // numeric(12,2)
-  formaPagamento?: string;
-  userId: string;          // uuid (public.Eventos.user_id -> auth.users.id)
+  user_id?: string;         // uuid (clientes.user_id)
+  created_at?: string;      // timestamptz
 
-  // Derivados de tabelas auxiliares ------------------------
-
-  // public.evento_aniversariantes
-  aniversariantes: {
-    id?: string;           // uuid (evento_aniversariantes.id) opcional no front
-    nome: string;
-    idade?: number;
-  }[];
-
-  // public.evento_adicionais (pivot evento x adicional)
-  adicionaisIds?: string[]; // lista de adicionais vinculados ao evento
-
-  // public.evento_adicionais_observacoes
-  adicionaisObservacoes?: {
-    id?: string;           // uuid (evento_adicionais_observacoes.id) opcional
-    adicionalId: string;
-    observacao: string;
-  }[];
-
-  // public.evento_adicionais_quantidade
-  adicionaisQuantidade?: {
-    id?: string;           // uuid (evento_adicionais_quantidade.id) opcional
-    adicionalId: string;
-    quantidade: number;
-  }[];
-
-  // public.evento_equipe_profissionais
-  equipeProfissionais?: {
-    id: string;            // uuid (evento_equipe_profissionais.id)
-    profissionalId?: string | null; // uuid opcional (profissional_id)
-    nome: string;
-    quantidade: number;
-  }[];
+  // Campos derivados usados na UI
+  piscinas_count?: number;
 }
 
-// Removido tipo Contrato
-// export interface Contrato {
-//   id: string;
-//   eventoId: string;
-//   clienteId: string;
-//   valor: number;
-//   desconto?: number;
-//   valorFinal: number;
-//   formaPagamento: string;
-//   status: 'ativo' | 'finalizado' | 'cancelado';
-//   dataAssinatura: string;
-//   observacoes?: string;
-// }
+export interface Piscina {
+  id: string;               // uuid (piscinas.id)
+  cliente_id: string;       // pode ser client_id ou cliente_id no DB; usar cliente_id no front
+  tipo?: string | null;
+  tamanho?: string | null;
+  endereco?: string | null;
+  observacoes?: string | null;
+  user_id?: string | null;
+  created_at?: string | null;
+}
+
+export interface Servico {
+  id: string;               // uuid (servicos.id)
+  user_id?: string | null;
+  cliente_id: string;
+  piscina_id: string;
+  tipo_servico?: string | null;
+  data_agendamento?: string | null; // yyyy-MM-dd
+  horario?: string | null;          // HH:mm
+  status?: string | null;           // ex: 'agendado','confirmado','concluido','cancelado'
+  observacoes?: string | null;
+  created_at?: string | null;
+
+  // Campos auxiliares para UI
+  cliente_nome?: string;
+  piscina_tamanho?: string;
+}
+
+export interface Cobranca {
+  id: string;               // uuid (cobrancas.id)
+  user_id?: string | null;
+  cliente_id?: string | null;
+  servico_id?: string | null;
+  valor?: number | null;
+  data_vencimento?: string | null; // yyyy-MM-dd
+  status?: string | null;          // ex: 'pendente','parcial','paga'
+  created_at?: string | null;
+}
+
+export interface Pagamento {
+  id: string;               // uuid (pagamentos.id)
+  user_id?: string | null;
+  cobranca_id: string;
+  data_pagamento?: string | null; // yyyy-MM-dd
+  valor_pago?: number | null;
+  forma_pagamento?: string | null;
+  observacoes?: string | null;
+  created_at?: string | null;
+}
+
+// Tipo usado pelo Calendário / listagens simplificadas
+export type EventoCalendario = {
+  id: string;
+  titulo?: string;
+  clienteNome?: string;
+  clienteId?: string;
+  data?: string;        // yyyy-MM-dd
+  horaInicio?: string;  // HH:mm
+  tipo?: string;
+  status?: string;
+  observacoes?: string;
+  valor?: number;
+  userId?: string;
+};

@@ -80,7 +80,7 @@ export const Layout = ({ children }: LayoutProps) => {
             }
           >
             <FileText size={16} />
-            <span>Eventos</span>
+            <span>Serviços</span>
           </NavLink>
 
           {/* <NavLink
@@ -228,7 +228,7 @@ export const Layout = ({ children }: LayoutProps) => {
                 }
               >
                 <FileText size={16} />
-                <span>Eventos</span>
+                <span>Serviços</span>
               </NavLink>
 
               <NavLink
